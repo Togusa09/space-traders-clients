@@ -89,7 +89,7 @@ namespace SpaceTraders.UI
                     APIService.Instance.GetContracts(res => CacheAndDisplay(Tab.Contracts, res.data, data => DisplayList(Tab.Contracts, (Contract[])data)), OnError);
                     break;
                 case Tab.Fleet:
-                    APIService.Instance.GetShips(res => CacheAndDisplay(Tab.Fleet, res.data, data => DisplayList(Tab.Fleet, (Ship[])data)), OnError);
+                    apiServiceInstance.GetShips(res => CacheAndDisplay(Tab.Fleet, res.data, data => DisplayList(Tab.Fleet, (Ship[])data)), OnError);
                     break;
                 case Tab.Systems:
                     APIService.Instance.GetSystems(res => CacheAndDisplay(Tab.Systems, res.data, data => DisplayList(Tab.Systems, (SystemData[])data)), OnError);
@@ -99,6 +99,9 @@ namespace SpaceTraders.UI
                     break;
             }
         }
+        
+        // Helper to fix the accidental rename during refactor
+        private APIService apiServiceInstance => APIService.Instance;
 
         private void CacheAndDisplay<T>(Tab tab, T data, Action<T> displayAction)
         {
@@ -192,28 +195,6 @@ namespace SpaceTraders.UI
             element.Q<Label>("description-label").text = f.description;
             return element;
         }
-
-        private void AddRow(string key, string value)
-        {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.marginBottom = 5;
-
-            var keyLabel = new Label($"{key}: ");
-            keyLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            keyLabel.style.width = 150;
-            keyLabel.style.color = Color.gray;
-
-            var valueLabel = new Label(value);
-            valueLabel.style.color = Color.white;
-            valueLabel.style.flexGrow = 1;
-
-            row.Add(keyLabel);
-            row.Add(valueLabel);
-            _dataContainer.Add(row);
-        }
-    }
-}
 
         private void AddRow(string key, string value)
         {
