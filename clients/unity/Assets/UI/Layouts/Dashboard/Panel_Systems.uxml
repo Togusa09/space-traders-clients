@@ -1,0 +1,27 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="split-view">
+        <!-- Left Pane: System List -->
+        <ui:VisualElement class="left-pane">
+            <ui:Label text="Systems" class="label-important" style="margin-bottom: 10px;" />
+            <ui:ScrollView name="system-list" style="flex-grow: 1;" />
+        </ui:VisualElement>
+
+        <!-- Right Pane: Map & Details -->
+        <ui:VisualElement class="right-pane">
+            <ui:Label name="selected-system-title" text="Select a System" class="label-important" style="margin-bottom: 10px;" />
+            
+            <ui:VisualElement name="map-container" class="system-map">
+                <!-- Waypoints will be generated here -->
+            </ui:VisualElement>
+
+            <!-- Waypoint Details Area -->
+            <ui:VisualElement name="waypoint-details" style="height: 150px; background-color: rgb(35, 35, 35); border-radius: 5px; padding: 10px;">
+                <ui:Label text="Waypoint Details" class="label-important" />
+                <ui:Label name="wp-symbol" text="-" />
+                <ui:Label name="wp-type" text="-" />
+                <ui:Label name="wp-coords" text="-" />
+                <ui:Label name="wp-info" text="Select a waypoint on the map" class="label-subtle" style="white-space: normal; margin-top: 5px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

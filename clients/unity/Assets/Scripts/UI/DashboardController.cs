@@ -22,12 +22,21 @@ namespace SpaceTraders.UI
         [SerializeField] private VisualTreeAsset shipTemplate;
         [SerializeField] private VisualTreeAsset systemTemplate;
         [SerializeField] private VisualTreeAsset factionTemplate;
+        [SerializeField] private VisualTreeAsset systemPanelTemplate;
+        [SerializeField] private VisualTreeAsset waypointIconTemplate;
 
         private Tab _currentTab = Tab.Agent;
         private Label _tabTitle;
         private VisualElement _dataContainer;
         private Label _statusLabel;
         private Button _backButton;
+
+        // Systems Panel References
+        private VisualElement _mapContainer;
+        private Label _selectedSystemTitle;
+        private Label _wpSymbol, _wpType, _wpCoords, _wpInfo;
+        private List<VisualElement> _systemEntries = new List<VisualElement>();
+        private List<VisualElement> _waypointIcons = new List<VisualElement>();
 
         private Dictionary<Tab, (object data, float timestamp)> _cache = new Dictionary<Tab, (object, float)>();
         private const float CacheDuration = 60f; // 1 minute
@@ -145,20 +154,132 @@ namespace SpaceTraders.UI
                 return;
             }
 
+            if (tab == Tab.Systems && items is SystemData[] systems)
+            {
+                SetupSystemsPanel(systems);
+                return;
+            }
+
             foreach (var item in items)
             {
                 VisualElement entry = null;
-
                 if (item is Contract c) entry = BindContract(c);
                 else if (item is Ship s) entry = BindShip(s);
-                else if (item is SystemData sys) entry = BindSystem(sys);
                 else if (item is Faction f) entry = BindFaction(f);
 
-                if (entry != null)
-                {
-                    _dataContainer.Add(entry);
-                }
+                if (entry != null) _dataContainer.Add(entry);
             }
+        }
+
+        private void SetupSystemsPanel(SystemData[] systems)
+        {
+            var panel = systemPanelTemplate.Instantiate();
+            panel.style.flexGrow = 1;
+            _dataContainer.Add(panel);
+
+            var listContainer = panel.Q<ScrollView>("system-list");
+            _mapContainer = panel.Q<VisualElement>("map-container");
+            _selectedSystemTitle = panel.Q<Label>("selected-system-title");
+            _wpSymbol = panel.Q<Label>("wp-symbol");
+            _wpType = panel.Q<Label>("wp-type");
+            _wpCoords = panel.Q<Label>("wp-coords");
+            _wpInfo = panel.Q<Label>("wp-info");
+
+            _systemEntries.Clear();
+
+            foreach (var sys in systems)
+            {
+                var entry = systemTemplate.Instantiate();
+                var root = entry.Q<VisualElement>(null, "dashboard-entry");
+                root.AddToClassList("selectable-entry");
+                
+                entry.Q<Label>("symbol-label").text = sys.symbol;
+                entry.Q<Label>("details-label").text = $"{sys.type} ({sys.waypoints.Length} WP)";
+
+                root.RegisterCallback<ClickEvent>(evt => SelectSystem(sys, root));
+                listContainer.Add(entry);
+                _systemEntries.Add(root);
+            }
+
+            if (systems.Length > 0) SelectSystem(systems[0], _systemEntries[0]);
+        }
+
+        private void SelectSystem(SystemData sys, VisualElement entryRoot)
+        {
+            foreach (var e in _systemEntries) e.RemoveFromClassList("selected-entry");
+            entryRoot.AddToClassList("selected-entry");
+
+            _selectedSystemTitle.text = $"System: {sys.symbol} ({sys.type})";
+            RenderMap(sys);
+        }
+
+        private void RenderMap(SystemData sys)
+        {
+            _mapContainer.Clear();
+            _waypointIcons.Clear();
+
+            if (sys.waypoints.Length == 0) return;
+
+            // Calculate bounds
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minY = float.MaxValue, maxY = float.MinValue;
+
+            foreach (var wp in sys.waypoints)
+            {
+                minX = Math.Min(minX, wp.x); maxX = Math.Max(maxX, wp.x);
+                minY = Math.Min(minY, wp.y); maxY = Math.Max(maxY, wp.y);
+            }
+
+            float rangeX = Math.Max(1, maxX - minX);
+            float rangeY = Math.Max(1, maxY - minY);
+            float padding = 40f;
+
+            foreach (var wp in sys.waypoints)
+            {
+                var iconRoot = waypointIconTemplate.Instantiate();
+                var icon = iconRoot.Q<VisualElement>("waypoint-root");
+                var label = iconRoot.Q<Label>("waypoint-name");
+
+                label.text = wp.symbol;
+                icon.AddToClassList($"wp-{wp.type.ToLower()}");
+
+                // Position calculation (Normalized 0-1 then scaled to container)
+                // We use schedule to wait for layout if needed, but since it's absolute we can just set percentages
+                float posX = ((wp.x - minX) / rangeX) * 90f + 5f; // 5-95% range
+                float posY = ((wp.y - minY) / rangeY) * 90f + 5f;
+
+                icon.style.left = Length.Percent(posX);
+                icon.style.top = Length.Percent(posY);
+
+                icon.RegisterCallback<ClickEvent>(evt => SelectWaypoint(wp, icon));
+                _mapContainer.Add(icon);
+                _waypointIcons.Add(icon);
+            }
+        }
+
+        private void SelectWaypoint(SystemWaypoint wp, VisualElement icon)
+        {
+            foreach (var i in _waypointIcons) i.RemoveFromClassList("waypoint-selected");
+            icon.AddToClassList("waypoint-selected");
+
+            _wpSymbol.text = $"Symbol: {wp.symbol}";
+            _wpType.text = $"Type: {wp.type}";
+            _wpCoords.text = $"Coordinates: ({wp.x}, {wp.y})";
+            _wpInfo.text = GetWaypointDescription(wp.type);
+        }
+
+        private string GetWaypointDescription(string type)
+        {
+            return type switch
+            {
+                "PLANET" => "A large celestial body orbiting a star.",
+                "MOON" => "A natural satellite orbiting a planet.",
+                "ORBITAL_STATION" => "A man-made structure in orbit.",
+                "JUMP_GATE" => "A fast-travel gateway to other systems.",
+                "ASTEROID_FIELD" => "A region dense with space rocks, rich in minerals.",
+                "GAS_GIANT" => "A massive planet composed mostly of gases.",
+                _ => "Information restricted or unknown."
+            };
         }
 
         private VisualElement BindContract(Contract c)
