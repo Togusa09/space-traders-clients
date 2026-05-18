@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="dashboard-entry">
+        <ui:Label name="id-label" text="ID: CONTRACT-ID" class="label-important" />
+        <ui:Label name="type-label" text="Type: TYPE | Faction: FACTION" />
+        <ui:Label name="status-label" text="Accepted: NO | Fulfilled: NO" />
+    </ui:VisualElement>
+</ui:UXML>

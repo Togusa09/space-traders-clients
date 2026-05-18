@@ -1,0 +1,12 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project:/Assets/UI/Styles/MainStyle.uss" />
+    <ui:VisualElement name="popup-overlay" class="popup-overlay">
+        <ui:VisualElement name="popup-content" class="popup-content">
+            <ui:Label name="popup-title" text="API Response" class="title" style="font-size: 24px; margin-bottom: 20px;" />
+            <ui:ScrollView name="popup-scroll-view" style="flex-grow: 1; margin-bottom: 20px;">
+                <ui:VisualElement name="popup-data-container" />
+            </ui:ScrollView>
+            <ui:Button name="popup-close-button" text="CLOSE" class="button" style="align-self: flex-end; width: 120px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,13 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project:/Assets/UI/Styles/TestStyle.uss" />
+    <ui:VisualElement class="test-root">
+        <ui:Label text="BACKGROUND CONTENT" style="color: white;" />
+        
+        <!-- This is the popup part -->
+        <ui:VisualElement class="test-overlay">
+            <ui:VisualElement class="test-box">
+                <ui:Label text="CENTERED POPUP" class="test-text" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

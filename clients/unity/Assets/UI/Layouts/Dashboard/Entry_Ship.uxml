@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="dashboard-entry">
+        <ui:Label name="symbol-label" text="Symbol: SHIP-SYMBOL" class="label-important" />
+        <ui:Label name="details-label" text="Role: ROLE | System: SYSTEM" />
+        <ui:Label name="status-label" text="Status: STATUS | Fuel: 0/0" />
+    </ui:VisualElement>
+</ui:UXML>

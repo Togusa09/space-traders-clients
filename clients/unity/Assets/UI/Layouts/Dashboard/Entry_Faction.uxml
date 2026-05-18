@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="dashboard-entry">
+        <ui:Label name="name-label" text="Name: FACTION-NAME" class="label-important" />
+        <ui:Label name="details-label" text="Symbol: SYMBOL | HQ: HQ-SYMBOL" />
+        <ui:Label name="description-label" text="Description" class="label-subtle" style="white-space: normal; margin-top: 5px;" />
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,56 @@
+# This .gitignore file should be placed at the root of your Unity project directory
+
+# --- Unity Folders ---
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# --- Unity Files ---
+*.log
+*.pidb
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+mono_crash.*
+
+# --- Asset Store & Plugins ---
+# Uncomment if you want to ignore Asset Store tools
+# /[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# --- IDE & OS Specific ---
+.vs/
+.gradle/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.booproj
+*.svd
+*.DotSettings.user
+.DS_Store
+Thumbs.db
+
+# --- Builds ---
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# --- Addressables ---
+/ServerData/
+/[Aa]ssets/StreamingAssets/aa/*
+/[Aa]ssets/AddressableAssetsData/link.xml
+/[Aa]ssets/Addressables_Temp/

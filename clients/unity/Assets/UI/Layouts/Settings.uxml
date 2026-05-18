@@ -1,0 +1,21 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:Template name="Popup" src="project://database/Assets/UI/Layouts/Popup.uxml?fileID=9197481963319205126&amp;guid=bd72fb4e5d5eb8642a263bc810a76a99&amp;type=3#Popup"/>
+    <Style src="project://database/Assets/UI/Styles/MainStyle.uss?fileID=7433441132597879392&amp;guid=9e70f9c4fea7f8d4b9080faaaa139e2d&amp;type=3#MainStyle"/>
+    <ui:VisualElement style="flex-grow: 1;">
+        <ui:VisualElement class="container">
+            <ui:Label text="SETTINGS" class="title"/>
+            
+            <ui:VisualElement style="flex-direction: row; align-items: center; width: 100%; justify-content: center;">
+                <ui:TextField name="agent-token-input" label="Agent Token" class="input-field" style="flex-grow: 1; margin-bottom: 0;"/>
+                <ui:Button name="test-agent-button" text="TEST" class="button" style="width: 80px; height: 40px;"/>
+            </ui:VisualElement>
+
+            <ui:VisualElement style="flex-direction: row; margin-top: 20px;">
+                <ui:Button name="save-button" text="SAVE" class="button"/>
+                <ui:Button name="back-button" text="BACK" class="button"/>
+            </ui:VisualElement>
+            <ui:Label name="status-label" class="status-label"/>
+        </ui:VisualElement>
+        <ui:Instance name="popup-instance" template="Popup" class="popup-overlay" style="display: none;"/>
+    </ui:VisualElement>
+</ui:UXML>

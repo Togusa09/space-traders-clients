@@ -1,0 +1,14 @@
+<ui:UXML 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ui="UnityEngine.UIElements"
+    xsi:noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd"
+>
+    <Style src="project:/Assets/UI/Styles/MainStyle.uss" />
+    <ui:VisualElement class="container">
+        <ui:Label text="REGISTER AGENT" class="title" />
+        <ui:TextField name="symbol-input" label="Callsign (Symbol)" class="input-field" />
+        <ui:TextField name="faction-input" label="Faction" class="input-field" />
+        <ui:Button name="register-button" text="REGISTER" class="button" />
+        <ui:Label name="status-label" class="status-label" />
+    </ui:VisualElement>
+</ui:UXML>

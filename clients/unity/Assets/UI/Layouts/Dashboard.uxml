@@ -1,0 +1,26 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project:/Assets/UI/Styles/MainStyle.uss" />
+    <ui:VisualElement class="container" style="justify-content: flex-start; align-items: stretch;">
+        <ui:Label text="GAMEPLAY DASHBOARD" class="title" style="font-size: 30px; margin-bottom: 20px; align-self: center;" />
+        
+        <!-- Tab Header -->
+        <ui:VisualElement style="flex-direction: row; background-color: rgb(35, 35, 35); padding: 5px; border-radius: 5px; margin-bottom: 10px;">
+            <ui:Button name="tab-agent" text="AGENT" class="button" style="flex-grow: 1; width: auto; margin: 2px;" />
+            <ui:Button name="tab-contracts" text="CONTRACTS" class="button" style="flex-grow: 1; width: auto; margin: 2px;" />
+            <ui:Button name="tab-fleet" text="FLEET" class="button" style="flex-grow: 1; width: auto; margin: 2px;" />
+            <ui:Button name="tab-systems" text="SYSTEMS" class="button" style="flex-grow: 1; width: auto; margin: 2px;" />
+            <ui:Button name="tab-factions" text="FACTIONS" class="button" style="flex-grow: 1; width: auto; margin: 2px;" />
+        </ui:VisualElement>
+
+        <!-- Content Area -->
+        <ui:VisualElement style="flex-grow: 1; background-color: rgb(30, 30, 30); padding: 20px; border-radius: 10px; border-width: 1px; border-color: rgb(50, 50, 50);">
+            <ui:ScrollView name="content-scroll">
+                <ui:Label name="tab-title" text="Agent Details" class="title" style="font-size: 24px; margin-bottom: 15px;" />
+                <ui:VisualElement name="data-container" />
+                <ui:Label name="status-label" class="status-label" style="margin-top: 10px;" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <ui:Button name="back-button" text="BACK TO MENU" class="button" style="align-self: center; margin-top: 20px;" />
+    </ui:VisualElement>
+</ui:UXML>
