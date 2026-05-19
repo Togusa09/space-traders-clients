@@ -13,7 +13,7 @@ namespace SpaceTraders.Core
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<AuthManager>();
+                    _instance = FindAnyObjectByType<AuthManager>();
                     if (_instance == null)
                     {
                         GameObject go = new GameObject("AuthManager");

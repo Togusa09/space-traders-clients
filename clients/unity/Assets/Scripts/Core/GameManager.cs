@@ -1,42 +1,38 @@
-using SpaceTraders.API;
-using SpaceTraders.Core;
+using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using SpaceTraders.API;
+using SpaceTraders.UI;
 
 namespace SpaceTraders.Core
 {
     public class GameManager : MonoBehaviour
     {
-        [SerializeField] private SpaceTradersClient client;
-        [SerializeField] private APIService apiService;
-        [SerializeField] private AuthManager authManager;
+        private static GameManager _instance;
+        public static GameManager Instance => _instance;
 
-        private void Start()
+        private void Awake()
         {
-            if (authManager.HasAgentToken)
+            if (_instance != null && _instance != this)
             {
-                client.SetToken(authManager.AgentToken);
-                Debug.Log("Agent Token loaded. Ready to play.");
-                FetchAgentData();
+                Destroy(gameObject);
+                return;
             }
-            else
-            {
-                Debug.Log("No agent token found. Please register or configure in settings.");
-            }
+
+            _instance = this;
+            DontDestroyOnLoad(gameObject);
+            
+            // Initialize Core Managers
+            _ = DatabaseManager.Instance;
+            _ = AuthManager.Instance;
+            _ = SpaceTradersClient.Instance;
+            _ = UniverseSyncManager.Instance;
         }
 
         public void OnRegistrationSuccess(string token)
         {
-            authManager.SaveAgentToken(token);
-            client.SetToken(token);
-            FetchAgentData();
-        }
-
-        private void FetchAgentData()
-        {
-            apiService.GetMyAgent(
-                response => Debug.Log($"Agent: {response.data.symbol}, Credits: {response.data.credits}"),
-                error => Debug.LogError($"Failed to fetch agent: {error}")
-            );
+            AuthManager.Instance.SaveAgentToken(token);
+            SceneManager.LoadScene("MainMenu");
         }
     }
 }

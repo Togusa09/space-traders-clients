@@ -4,26 +4,25 @@ using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
 using SpaceTraders.API;
 using SpaceTraders.API.Models;
+using System;
 
 namespace SpaceTraders.UI
 {
     public class SettingsUI : MonoBehaviour
     {
         [SerializeField] private UIDocument uiDocument;
-        // Removed AuthManager, apiClient, and apiService fields as we use Singletons
-
         [SerializeField] private string mainMenuSceneName = "MainMenu";
 
         private TextField _agentTokenInput;
-        private Button _saveButton;
-        private Button _backButton;
-        private Button _testAgentButton;
+        private Button _saveButton, _backButton, _testAgentButton;
         private Label _statusLabel;
 
+        // Debug Elements
+        private Button _startSyncBtn, _stopSyncBtn, _clearCacheBtn;
+        private Label _syncStatus, _dbCount, _expectedCount, _syncProgress;
+
         // Popup elements
-        private VisualElement _popupInstance;
-        private VisualElement _popupOverlay;
-        private VisualElement _popupDataContainer;
+        private VisualElement _popupInstance, _popupOverlay, _popupDataContainer;
         private Label _popupTitle;
         private Button _popupCloseButton;
 
@@ -37,6 +36,16 @@ namespace SpaceTraders.UI
             _testAgentButton = root.Q<Button>("test-agent-button");
             _statusLabel = root.Q<Label>("status-label");
 
+            // Debug Bindings
+            _startSyncBtn = root.Q<Button>("start-sync-btn");
+            _stopSyncBtn = root.Q<Button>("stop-sync-btn");
+            _clearCacheBtn = root.Q<Button>("clear-cache-button");
+            
+            _syncStatus = root.Q<Label>("sync-status");
+            _dbCount = root.Q<Label>("db-count");
+            _expectedCount = root.Q<Label>("expected-count");
+            _syncProgress = root.Q<Label>("sync-progress");
+
             // Popup
             _popupInstance = root.Q<VisualElement>("popup-instance");
             _popupOverlay = root.Q<VisualElement>("popup-overlay");
@@ -44,16 +53,40 @@ namespace SpaceTraders.UI
             _popupTitle = root.Q<Label>("popup-title");
             _popupCloseButton = root.Q<Button>("popup-close-button");
 
-            // Populate current values from Singleton
             _agentTokenInput.value = AuthManager.Instance.AgentToken;
 
             _saveButton.clicked += OnSaveClicked;
             _backButton.clicked += OnBackClicked;
             _testAgentButton.clicked += OnTestAgentClicked;
+
+            _startSyncBtn.clicked += () => UniverseSyncManager.Instance.StartSync();
+            _stopSyncBtn.clicked += () => UniverseSyncManager.Instance.StopSync();
+            _clearCacheBtn.clicked += () => {
+                DatabaseManager.Instance.ClearCache();
+                _statusLabel.text = "Database cleared.";
+            };
+
             _popupCloseButton.clicked += () => {
                 _popupOverlay.style.display = DisplayStyle.None;
                 _popupInstance.style.display = DisplayStyle.None;
             };
+        }
+
+        private void Update()
+        {
+            // Update stats in real-time
+            var sync = UniverseSyncManager.Instance;
+            var db = DatabaseManager.Instance;
+
+            _syncStatus.text = sync.IsSyncing ? "Syncing..." : "Idle";
+            _syncStatus.style.color = sync.IsSyncing ? Color.green : Color.white;
+            
+            _dbCount.text = db.GetIndexedSystemCount().ToString("N0");
+            _expectedCount.text = sync.TotalSystemsExpected > 0 ? sync.TotalSystemsExpected.ToString("N0") : "?";
+            _syncProgress.text = $"{(sync.Progress * 100):F1}% (Page {sync.CurrentPage}/{sync.TotalPages})";
+
+            _startSyncBtn.SetEnabled(!sync.IsSyncing);
+            _stopSyncBtn.SetEnabled(sync.IsSyncing);
         }
 
         private void OnSaveClicked()
@@ -62,19 +95,21 @@ namespace SpaceTraders.UI
             _statusLabel.text = "Token saved successfully!";
         }
 
-        private void OnBackClicked()
-        {
-            SceneManager.LoadScene(mainMenuSceneName);
-        }
+        private void OnBackClicked() => SceneManager.LoadScene(mainMenuSceneName);
 
-        private void OnTestAgentClicked()
+        private async void OnTestAgentClicked()
         {
             _statusLabel.text = "Testing Agent Token...";
-            SpaceTradersClient.Instance.SetToken(_agentTokenInput.value);
-            APIService.Instance.GetMyAgent(
-                response => ShowAgentData(response.data),
-                error => ShowError("Agent Test Failed", error)
-            );
+            try
+            {
+                SpaceTradersClient.Instance.SetToken(_agentTokenInput.value);
+                var response = await APIService.Instance.GetMyAgent();
+                ShowAgentData(response.data);
+            }
+            catch (Exception e)
+            {
+                ShowError("Agent Test Failed", e.Message);
+            }
         }
 
         private void ShowAgentData(Agent agent)
@@ -82,13 +117,10 @@ namespace SpaceTraders.UI
             _statusLabel.text = "Agent test success.";
             _popupTitle.text = "Agent Information";
             _popupDataContainer.Clear();
-
             AddDataRow("Symbol", agent.symbol);
             AddDataRow("Headquarters", agent.headquarters);
             AddDataRow("Credits", agent.credits.ToString("N0"));
             AddDataRow("Starting Faction", agent.startingFaction);
-            AddDataRow("Account ID", agent.accountId);
-
             _popupInstance.style.display = DisplayStyle.Flex;
             _popupOverlay.style.display = DisplayStyle.Flex;
         }
@@ -98,33 +130,17 @@ namespace SpaceTraders.UI
             _statusLabel.text = "Test failed.";
             _popupTitle.text = title;
             _popupDataContainer.Clear();
-            
-            var errorLabel = new Label(error);
-            errorLabel.style.color = Color.red;
-            errorLabel.style.whiteSpace = WhiteSpace.Normal;
+            var errorLabel = new Label(error) { style = { color = Color.red, whiteSpace = WhiteSpace.Normal } };
             _popupDataContainer.Add(errorLabel);
-
             _popupInstance.style.display = DisplayStyle.Flex;
             _popupOverlay.style.display = DisplayStyle.Flex;
         }
 
         private void AddDataRow(string key, string value)
         {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.marginBottom = 5;
-
-            var keyLabel = new Label($"{key}: ");
-            keyLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            keyLabel.style.width = 150;
-            keyLabel.style.color = Color.gray;
-
-            var valueLabel = new Label(value);
-            valueLabel.style.color = Color.white;
-            valueLabel.style.flexGrow = 1;
-
-            row.Add(keyLabel);
-            row.Add(valueLabel);
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };
+            row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
+            row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
             _popupDataContainer.Add(row);
         }
     }

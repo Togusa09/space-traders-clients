@@ -2,20 +2,55 @@
     <ui:Template name="Popup" src="project://database/Assets/UI/Layouts/Popup.uxml?fileID=9197481963319205126&amp;guid=bd72fb4e5d5eb8642a263bc810a76a99&amp;type=3#Popup"/>
     <Style src="project://database/Assets/UI/Styles/MainStyle.uss?fileID=7433441132597879392&amp;guid=9e70f9c4fea7f8d4b9080faaaa139e2d&amp;type=3#MainStyle"/>
     <ui:VisualElement style="flex-grow: 1;">
-        <ui:VisualElement class="container">
-            <ui:Label text="SETTINGS" class="title"/>
+        <ui:ScrollView class="container" style="justify-content: flex-start; align-items: stretch;">
+            <ui:Label text="SETTINGS" class="title" style="align-self: center;"/>
             
-            <ui:VisualElement style="flex-direction: row; align-items: center; width: 100%; justify-content: center;">
-                <ui:TextField name="agent-token-input" label="Agent Token" class="input-field" style="flex-grow: 1; margin-bottom: 0;"/>
-                <ui:Button name="test-agent-button" text="TEST" class="button" style="width: 80px; height: 40px;"/>
+            <ui:VisualElement style="padding: 15px; background-color: rgb(30, 30, 30); border-radius: 5px; margin-bottom: 20px;">
+                <ui:Label text="Authentication" class="label-important" style="margin-bottom: 10px;" />
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <ui:TextField name="agent-token-input" label="Agent Token" class="input-field" style="flex-grow: 1; margin-bottom: 0;"/>
+                    <ui:Button name="test-agent-button" text="TEST" class="button" style="width: 80px; height: 40px;"/>
+                </ui:VisualElement>
+                <ui:VisualElement style="flex-direction: row; margin-top: 10px; justify-content: center;">
+                    <ui:Button name="save-button" text="SAVE" class="button" style="width: 120px;"/>
+                    <ui:Button name="back-button" text="BACK" class="button" style="width: 120px;"/>
+                </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement style="flex-direction: row; margin-top: 20px;">
-                <ui:Button name="save-button" text="SAVE" class="button"/>
-                <ui:Button name="back-button" text="BACK" class="button"/>
+            <!-- Universe Debug Menu -->
+            <ui:VisualElement style="padding: 15px; background-color: rgb(30, 30, 30); border-radius: 5px; margin-bottom: 20px;">
+                <ui:Label text="Universe Sync Debug" class="label-important" style="margin-bottom: 10px;" />
+                
+                <ui:VisualElement style="background-color: rgb(20, 20, 20); padding: 10px; border-radius: 3px; margin-bottom: 10px;">
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+                        <ui:Label text="Status:" class="label-subtle" />
+                        <ui:Label name="sync-status" text="Idle" style="color: white;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+                        <ui:Label text="Systems in DB:" class="label-subtle" />
+                        <ui:Label name="db-count" text="0" style="color: white;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+                        <ui:Label text="Expected Total:" class="label-subtle" />
+                        <ui:Label name="expected-count" text="?" style="color: white;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+                        <ui:Label text="Sync Progress:" class="label-subtle" />
+                        <ui:Label name="sync-progress" text="0%" style="color: white;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+                    <ui:Button name="start-sync-btn" text="START SYNC" class="button" style="flex-grow: 1; background-color: rgb(50, 100, 50);" />
+                    <ui:Button name="stop-sync-btn" text="STOP SYNC" class="button" style="flex-grow: 1; background-color: rgb(100, 50, 50);" />
+                </ui:VisualElement>
+                
+                <ui:Button name="clear-cache-button" text="CLEAR ENTIRE DB" class="button" style="background-color: rgb(150, 50, 50); margin-top: 10px;" />
+                <ui:Label text="Warning: This wipes all indexed systems and API cache." class="label-subtle" style="font-size: 10px; margin-top: 5px; -unity-text-align: middle-center; color: orange;" />
             </ui:VisualElement>
-            <ui:Label name="status-label" class="status-label"/>
-        </ui:VisualElement>
+
+            <ui:Label name="status-label" class="status-label" style="-unity-text-align: middle-center; margin-top: 10px;"/>
+        </ui:ScrollView>
         <ui:Instance name="popup-instance" template="Popup" class="popup-overlay" style="display: none;"/>
     </ui:VisualElement>
 </ui:UXML>

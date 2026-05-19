@@ -1,6 +1,7 @@
 using System;
-using System.Collections;
+using System.Threading.Tasks;
 using SpaceTraders.API.Models;
+using SpaceTraders.Core;
 using UnityEngine;
 
 namespace SpaceTraders.API
@@ -14,7 +15,8 @@ namespace SpaceTraders.API
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<APIService>();
+                    _instance = FindAnyObjectByType<APIService>();
+
                     if (_instance == null)
                     {
                         GameObject go = new GameObject("APIService");
@@ -25,6 +27,8 @@ namespace SpaceTraders.API
                 return _instance;
             }
         }
+
+        private const long PersistentCacheMaxAge = 24 * 60 * 60; // 24 hours
 
         private void Awake()
         {
@@ -38,35 +42,111 @@ namespace SpaceTraders.API
             DontDestroyOnLoad(gameObject);
         }
 
-        public void Register(string symbol, string faction, Action<RegistrationResponse> onSuccess, Action<string> onError)
+        public async Task<RegistrationResponse> Register(string symbol, string faction)
         {
             var data = new RegistrationData { symbol = symbol, faction = faction };
-            StartCoroutine(SpaceTradersClient.Instance.PostRequest<RegistrationResponse, RegistrationData>("/register", data, onSuccess, onError));
+            return await SpaceTradersClient.Instance.PostRequest<RegistrationResponse, RegistrationData>("/register", data);
         }
 
-        public void GetMyAgent(Action<AgentResponse> onSuccess, Action<string> onError)
+        public async Task<AgentResponse> GetMyAgent()
         {
-            StartCoroutine(SpaceTradersClient.Instance.GetRequest<AgentResponse>("/my/agent", onSuccess, onError));
+            return await SpaceTradersClient.Instance.GetRequest<AgentResponse>("/my/agent");
         }
 
-        public void GetContracts(Action<ContractsResponse> onSuccess, Action<string> onError)
+        public async Task<ContractsResponse> GetContracts()
         {
-            StartCoroutine(SpaceTradersClient.Instance.GetRequest<ContractsResponse>("/my/contracts", onSuccess, onError));
+            return await SpaceTradersClient.Instance.GetRequest<ContractsResponse>("/my/contracts");
         }
 
-        public void GetShips(Action<ShipsResponse> onSuccess, Action<string> onError)
+        public async Task<ShipsResponse> GetShips()
         {
-            StartCoroutine(SpaceTradersClient.Instance.GetRequest<ShipsResponse>("/my/ships", onSuccess, onError));
+            return await SpaceTradersClient.Instance.GetRequest<ShipsResponse>("/my/ships");
         }
 
-        public void GetSystems(Action<SystemsResponse> onSuccess, Action<string> onError)
+        public async Task<SystemsResponse> GetSystems(int page = 1, int limit = 10)
         {
-            StartCoroutine(SpaceTradersClient.Instance.GetRequest<SystemsResponse>("/systems", onSuccess, onError));
+            string cacheKey = $"systems_p{page}_l{limit}";
+            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+
+            if (!string.IsNullOrEmpty(cachedJson))
+            {
+                try
+                {
+                    Debug.Log($"[APIService] Using cached systems for page {page}");
+                    return JsonUtility.FromJson<SystemsResponse>(cachedJson);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[APIService] Failed to parse cached systems: {e.Message}");
+                }
+            }
+
+            string endpoint = $"/systems?page={page}&limit={limit}";
+            Debug.Log($"[APIService] Fetching systems page {page} from network...");
+            string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
+            
+            Debug.Log($"[APIService] Received systems page {page} from network. Caching...");
+            DatabaseManager.Instance.SetCache(cacheKey, json);
+            return JsonUtility.FromJson<SystemsResponse>(json);
         }
 
-        public void GetFactions(Action<FactionsResponse> onSuccess, Action<string> onError)
+        public async Task<MarketResponse> GetMarket(string systemSymbol, string waypointSymbol)
         {
-            StartCoroutine(SpaceTradersClient.Instance.GetRequest<FactionsResponse>("/factions", onSuccess, onError));
+            return await SpaceTradersClient.Instance.GetRequest<MarketResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/market");
+        }
+
+        public async Task<ShipyardResponse> GetShipyard(string systemSymbol, string waypointSymbol)
+        {
+            return await SpaceTradersClient.Instance.GetRequest<ShipyardResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/shipyard");
+        }
+
+        public async Task<ConstructionResponse> GetConstruction(string systemSymbol, string waypointSymbol)
+        {
+            return await SpaceTradersClient.Instance.GetRequest<ConstructionResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/construction");
+        }
+
+        public async Task<JumpGateResponse> GetJumpGate(string systemSymbol, string waypointSymbol)
+        {
+            return await SpaceTradersClient.Instance.GetRequest<JumpGateResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/jump-gate");
+        }
+
+        [Serializable]
+        public class JumpGate
+        {
+            public string symbol;
+            public string[] connections;
+        }
+
+        [Serializable]
+        public class JumpGateResponse
+        {
+            public JumpGate data;
+        }
+
+        public async Task<FactionsResponse> GetFactions()
+        {
+            string cacheKey = "factions_list";
+            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+
+            if (!string.IsNullOrEmpty(cachedJson))
+            {
+                try
+                {
+                    Debug.Log("[APIService] Using cached factions");
+                    return JsonUtility.FromJson<FactionsResponse>(cachedJson);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[APIService] Failed to parse cached factions: {e.Message}");
+                }
+            }
+
+            Debug.Log("[APIService] Fetching factions from network...");
+            string json = await SpaceTradersClient.Instance.GetRequestRaw("/factions");
+            
+            Debug.Log("[APIService] Received factions from network. Caching...");
+            DatabaseManager.Instance.SetCache(cacheKey, json);
+            return JsonUtility.FromJson<FactionsResponse>(json);
         }
     }
 }

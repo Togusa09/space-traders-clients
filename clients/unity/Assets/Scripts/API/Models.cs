@@ -239,4 +239,105 @@ namespace SpaceTraders.API.Models
         public SystemData[] data;
         public Meta meta;
     }
+
+    [Serializable]
+    public class Market
+    {
+        public string symbol;
+        public MarketTradeGood[] exports;
+        public MarketTradeGood[] imports;
+        public MarketTradeGood[] exchange;
+        public MarketTransaction[] transactions;
+        public MarketTradeGood[] tradeGoods;
+    }
+
+    [Serializable]
+    public class MarketTradeGood
+    {
+        public string symbol;
+        public string type;
+        public int tradeVolume;
+        public string supply;
+        public string activity;
+        public long purchasePrice;
+        public long sellPrice;
+    }
+
+    [Serializable]
+    public class MarketTransaction
+    {
+        public string waypointSymbol;
+        public string shipSymbol;
+        public string tradeSymbol;
+        public string type;
+        public int units;
+        public long pricePerUnit;
+        public long totalPrice;
+        public string timestamp;
+    }
+
+    [Serializable]
+    public class MarketResponse
+    {
+        public Market data;
+    }
+
+    [Serializable]
+    public class Shipyard
+    {
+        public string symbol;
+        public string[] shipTypes;
+        public ShipyardTransaction[] transactions;
+        public ShipyardShip[] ships;
+        public int modificationsFee;
+    }
+
+    [Serializable]
+    public class ShipyardTransaction
+    {
+        public string waypointSymbol;
+        public string shipSymbol;
+        public string shipType;
+        public long price;
+        public string agentSymbol;
+        public string timestamp;
+    }
+
+    [Serializable]
+    public class ShipyardShip
+    {
+        public string type;
+        public string name;
+        public string description;
+        public long purchasePrice;
+        public ShipFrame frame;
+    }
+
+    [Serializable]
+    public class ShipyardResponse
+    {
+        public Shipyard data;
+    }
+
+    [Serializable]
+    public class Construction
+    {
+        public string symbol;
+        public ConstructionMaterial[] materials;
+        public bool isComplete;
+    }
+
+    [Serializable]
+    public class ConstructionMaterial
+    {
+        public string tradeSymbol;
+        public int required;
+        public int fulfilled;
+    }
+
+    [Serializable]
+    public class ConstructionResponse
+    {
+        public Construction data;
+    }
 }

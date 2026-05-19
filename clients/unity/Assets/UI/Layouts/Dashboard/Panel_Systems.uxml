@@ -2,25 +2,45 @@
     <ui:VisualElement class="split-view">
         <!-- Left Pane: System List -->
         <ui:VisualElement class="left-pane">
-            <ui:Label text="Systems" class="label-important" style="margin-bottom: 10px;" />
+            <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <ui:Label name="map-heading" text="Galaxy Map" class="label-important" />
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <ui:Button name="view-galaxy-btn" text="GALAXY" class="button" style="height: 25px; margin: 0 5px; display: none;" />
+                    <ui:TextField name="system-search" placeholder-text="Search systems..." style="width: 150px; height: 25px; font-size: 11px;" />
+                    <ui:Button name="prev-page" text="&lt;" class="button" style="width: 30px; height: 25px; margin: 0 0 0 5px; padding: 0;" />
+                    <ui:Label name="page-info" text="1/1" style="margin: 0 5px; font-size: 12px;" />
+                    <ui:Button name="next-page" text="&gt;" class="button" style="width: 30px; height: 25px; margin: 0; padding: 0;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
             <ui:ScrollView name="system-list" style="flex-grow: 1;" />
         </ui:VisualElement>
 
         <!-- Right Pane: Map & Details -->
         <ui:VisualElement class="right-pane">
-            <ui:Label name="selected-system-title" text="Select a System" class="label-important" style="margin-bottom: 10px;" />
+            <ui:Label name="selected-system-title" text="Select a System" class="label-important" style="margin-bottom: 2px;" />
             
             <ui:VisualElement name="map-container" class="system-map">
                 <!-- Waypoints will be generated here -->
             </ui:VisualElement>
 
             <!-- Waypoint Details Area -->
-            <ui:VisualElement name="waypoint-details" style="height: 150px; background-color: rgb(35, 35, 35); border-radius: 5px; padding: 10px;">
-                <ui:Label text="Waypoint Details" class="label-important" />
-                <ui:Label name="wp-symbol" text="-" />
-                <ui:Label name="wp-type" text="-" />
-                <ui:Label name="wp-coords" text="-" />
-                <ui:Label name="wp-info" text="Select a waypoint on the map" class="label-subtle" style="white-space: normal; margin-top: 5px;" />
+            <ui:VisualElement name="waypoint-details" style="height: 140px; background-color: rgb(35, 35, 35); border-radius: 5px; padding: 10px; flex-direction: row;">
+                <!-- Left Info: Basic Stats -->
+                <ui:VisualElement style="width: 200px; border-right-width: 1px; border-right-color: rgb(50, 50, 50); padding-right: 10px;">
+                    <ui:Label text="Waypoint Details" class="label-important" style="margin-bottom: 5px;" />
+                    <ui:Label name="wp-symbol" text="-" class="label-important" style="font-size: 14px;" />
+                    <ui:Label name="wp-type" text="-" style="font-size: 12px; color: rgb(0, 150, 255);" />
+                    <ui:Label name="wp-coords" text="-" style="font-size: 11px; color: gray;" />
+                    <ui:Label name="wp-desc" text="Select a waypoint" class="label-subtle" style="white-space: normal; font-size: 10px; margin-top: 5px;" />
+                </ui:VisualElement>
+
+                <!-- Right Info: Specialized Data (Market/Shipyard/etc) -->
+                <ui:VisualElement style="flex-grow: 1; padding-left: 10px;">
+                    <ui:Label name="extra-info-title" text="Specialized Info" class="label-important" style="font-size: 12px; margin-bottom: 5px;" />
+                    <ui:ScrollView name="wp-extra-scroll" style="flex-grow: 1;">
+                        <ui:VisualElement name="extra-content-container" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

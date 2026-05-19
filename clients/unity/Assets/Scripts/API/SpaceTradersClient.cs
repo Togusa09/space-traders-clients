@@ -1,8 +1,9 @@
 using System;
-using System.Collections;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
+using SpaceTraders.Core;
 
 namespace SpaceTraders.API
 {
@@ -18,7 +19,8 @@ namespace SpaceTraders.API
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<SpaceTradersClient>();
+                    _instance = FindAnyObjectByType<SpaceTradersClient>();
+
                     if (_instance == null)
                     {
                         GameObject go = new GameObject("SpaceTradersClient");
@@ -45,23 +47,70 @@ namespace SpaceTraders.API
         public void SetToken(string token)
         {
             _token = token;
+            Debug.Log("[SpaceTradersClient] Token updated.");
         }
 
-        public IEnumerator GetRequest<T>(string endpoint, Action<T> onSuccess, Action<string> onError)
+        public async Task<T> GetRequest<T>(string endpoint)
         {
+            Debug.Log($"[SpaceTradersClient] GET {endpoint}");
             using (UnityWebRequest webRequest = UnityWebRequest.Get($"{BaseUrl}{endpoint}"))
             {
                 SetHeaders(webRequest);
-                yield return webRequest.SendWebRequest();
+                var operation = webRequest.SendWebRequest();
 
-                HandleResponse(webRequest, onSuccess, onError);
+                while (!operation.isDone) await Task.Yield();
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        Debug.Log($"[SpaceTradersClient] Success: {endpoint} ({webRequest.downloadHandler.text.Length} bytes)");
+                        return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[SpaceTradersClient] Parse Error: {e.Message}\n{webRequest.downloadHandler.text}");
+                        throw;
+                    }
+                }
+                else
+                {
+                    string err = $"Error {webRequest.responseCode}: {webRequest.error}";
+                    Debug.LogError($"[SpaceTradersClient] Request failed: {endpoint}\n{err}\n{webRequest.downloadHandler.text}");
+                    throw new Exception(err);
+                }
             }
         }
 
-        public IEnumerator PostRequest<T, R>(string endpoint, R rawData, Action<T> onSuccess, Action<string> onError)
+        public async Task<string> GetRequestRaw(string endpoint)
+        {
+            Debug.Log($"[SpaceTradersClient] GET (Raw) {endpoint}");
+            using (UnityWebRequest webRequest = UnityWebRequest.Get($"{BaseUrl}{endpoint}"))
+            {
+                SetHeaders(webRequest);
+                var operation = webRequest.SendWebRequest();
+
+                while (!operation.isDone) await Task.Yield();
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log($"[SpaceTradersClient] Success: {endpoint} ({webRequest.downloadHandler.text.Length} bytes)");
+                    return webRequest.downloadHandler.text;
+                }
+                else
+                {
+                    string err = $"Error {webRequest.responseCode}: {webRequest.error}";
+                    Debug.LogError($"[SpaceTradersClient] Failed: {endpoint}\n{err}\n{webRequest.downloadHandler.text}");
+                    throw new Exception(err);
+                }
+            }
+        }
+
+        public async Task<T> PostRequest<T, R>(string endpoint, R rawData)
         {
             string jsonData = JsonUtility.ToJson(rawData);
-            using (UnityWebRequest webRequest = UnityWebRequest.PostWwwForm($"{BaseUrl}{endpoint}", "POST"))
+            Debug.Log($"[SpaceTradersClient] POST {endpoint}");
+            using (UnityWebRequest webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST"))
             {
                 byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -69,48 +118,36 @@ namespace SpaceTraders.API
                 webRequest.SetRequestHeader("Content-Type", "application/json");
                 
                 SetHeaders(webRequest);
-                yield return webRequest.SendWebRequest();
+                var operation = webRequest.SendWebRequest();
 
-                HandleResponse(webRequest, onSuccess, onError);
+                while (!operation.isDone) await Task.Yield();
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log($"[SpaceTradersClient] Success: {endpoint} ({webRequest.downloadHandler.text.Length} bytes)");
+                    return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                }
+                else
+                {
+                    string err = $"Error {webRequest.responseCode}: {webRequest.error}";
+                    Debug.LogError($"[SpaceTradersClient] Request failed: {endpoint}\n{err}\n{webRequest.downloadHandler.text}");
+                    throw new Exception(err);
+                }
             }
         }
 
         private void SetHeaders(UnityWebRequest webRequest)
         {
+            if (string.IsNullOrEmpty(_token))
+            {
+                _token = AuthManager.Instance.AgentToken;
+            }
+
             if (!string.IsNullOrEmpty(_token))
             {
                 webRequest.SetRequestHeader("Authorization", $"Bearer {_token}");
             }
             webRequest.SetRequestHeader("Accept", "application/json");
-        }
-
-        private void HandleResponse<T>(UnityWebRequest webRequest, Action<T> onSuccess, Action<string> onError)
-        {
-            if (webRequest.result == UnityWebRequest.Result.Success)
-            {
-                try
-                {
-                    T data = JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
-                    onSuccess?.Invoke(data);
-                }
-                catch (Exception e)
-                {
-                    onError?.Invoke($"Failed to parse response: {e.Message}");
-                }
-            }
-            else
-            {
-                string errorMessage = $"Error {webRequest.responseCode}: ";
-                if (!string.IsNullOrEmpty(webRequest.downloadHandler.text))
-                {
-                    errorMessage += webRequest.downloadHandler.text;
-                }
-                else
-                {
-                    errorMessage += webRequest.error;
-                }
-                onError?.Invoke(errorMessage);
-            }
         }
     }
 }
