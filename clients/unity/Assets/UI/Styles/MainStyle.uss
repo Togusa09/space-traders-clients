@@ -51,7 +51,7 @@
     background-color: rgb(35, 35, 35);
     border-color: rgb(60, 60, 60);
     color: white;
-    padding: 5px;
+    padding: 2px 5px;
 }
 
 .input-field #unity-text-input:focus {
@@ -158,11 +158,12 @@
 
 .waypoint-label {
     position: absolute;
-    top: 12px;
+    top: 14px;
     font-size: 9px;
     color: white;
     -unity-text-align: middle-center;
     white-space: nowrap;
+    overflow: visible;
 }
 
 /* Waypoint Type Colors */

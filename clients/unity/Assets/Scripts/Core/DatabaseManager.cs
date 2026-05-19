@@ -129,6 +129,13 @@ namespace SpaceTraders.Core
 
         // --- Efficient Universe Querying ---
 
+        public List<IndexedSystem> GetAllSystems()
+        {
+            if (_db == null) return new List<IndexedSystem>();
+            try { return _db.Table<IndexedSystem>().ToList(); }
+            catch { return new List<IndexedSystem>(); }
+        }
+
         public void StoreSystems(IEnumerable<IndexedSystem> systems)
         {
             if (_db == null) return;

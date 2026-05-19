@@ -50,8 +50,10 @@ namespace SpaceTraders.UI
         private Vector2 _mapOffset = Vector2.zero;
         private float _mapZoom = 1.0f;
         private SystemData _currentSystem;
-        private List<DatabaseManager.IndexedSystem> _galaxySystems = new List<DatabaseManager.IndexedSystem>();
+        private List<DatabaseManager.IndexedSystem> _allGalaxySystems = new List<DatabaseManager.IndexedSystem>();
+        private List<DatabaseManager.IndexedSystem> _pagedGalaxySystems = new List<DatabaseManager.IndexedSystem>();
         private bool _mapInitialized = false;
+        private bool _showRoutes = true;
 
         private int _currentSystemsPage = 1;
         private int _totalSystemsPages = 1;
@@ -106,6 +108,8 @@ namespace SpaceTraders.UI
             {
                 _mapMode = MapMode.Galaxy;
                 _currentSystemsPage = 1;
+                // Pre-load all systems for map
+                _allGalaxySystems = DatabaseManager.Instance.GetAllSystems();
                 SetupMapPanel();
                 return;
             }
@@ -243,17 +247,21 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
-                var systems = DatabaseManager.Instance.SearchSystems(search);
-                int totalCount = DatabaseManager.Instance.GetIndexedSystemCount();
-                _totalSystemsPages = (int)Math.Ceiling((double)totalCount / SystemsPerPage);
-                
-                var paged = systems.Skip((_currentSystemsPage - 1) * SystemsPerPage).Take(SystemsPerPage).ToList();
-                _galaxySystems = paged;
+                // Filter all systems for searching
+                var filtered = string.IsNullOrEmpty(search) 
+                    ? _allGalaxySystems 
+                    : _allGalaxySystems.Where(s => s.Symbol.Contains(search)).ToList();
 
-                foreach (var sys in paged)
+                _totalSystemsPages = (int)Math.Ceiling((double)filtered.Count / SystemsPerPage);
+                if (_currentSystemsPage > _totalSystemsPages) _currentSystemsPage = Math.Max(1, _totalSystemsPages);
+
+                _pagedGalaxySystems = filtered.Skip((_currentSystemsPage - 1) * SystemsPerPage).Take(SystemsPerPage).ToList();
+
+                foreach (var sys in _pagedGalaxySystems)
                 {
                     var entry = systemTemplate.Instantiate();
                     var root = entry.Q<VisualElement>(null, "dashboard-entry");
+                    root.name = $"list-{sys.Symbol}";
                     root.AddToClassList("selectable-entry");
                     entry.Q<Label>("symbol-label").text = sys.Symbol;
                     entry.Q<Label>("details-label").text = $"{sys.Type} ({sys.WaypointCount} WP)";
@@ -264,9 +272,9 @@ namespace SpaceTraders.UI
 
                 _pageInfoLabel.text = $"{_currentSystemsPage}/{_totalSystemsPages}";
                 _prevPageBtn.SetEnabled(_currentSystemsPage > 1);
-                _nextPageBtn.SetEnabled(true);
+                _nextPageBtn.SetEnabled(_currentSystemsPage < _totalSystemsPages);
 
-                if (paged.Count > 0) SelectGalaxySystem(paged[0], _listEntries[0]);
+                if (_pagedGalaxySystems.Count > 0) SelectGalaxySystem(_pagedGalaxySystems[0], _listEntries[0]);
                 else ResetMap(); 
             }
             else
@@ -281,6 +289,7 @@ namespace SpaceTraders.UI
                 {
                     var entry = systemTemplate.Instantiate();
                     var root = entry.Q<VisualElement>(null, "dashboard-entry");
+                    root.name = $"list-{wp.symbol}";
                     root.AddToClassList("selectable-entry");
                     entry.Q<Label>("symbol-label").text = wp.symbol;
                     entry.Q<Label>("details-label").text = wp.type;
@@ -299,19 +308,36 @@ namespace SpaceTraders.UI
         private void SelectGalaxySystem(DatabaseManager.IndexedSystem sys, VisualElement entryRoot)
         {
             foreach (var e in _listEntries) e.RemoveFromClassList("selected-entry");
-            entryRoot.AddToClassList("selected-entry");
+            entryRoot?.AddToClassList("selected-entry");
+            
+            // Scroll to entry if it exists in the list
+            if (entryRoot != null) {
+                var scroll = _dataContainer.Q<ScrollView>("system-list");
+                scroll.ScrollTo(entryRoot);
+            }
+
             _selectedSystemTitle.text = sys.Symbol;
             _selectedSystemSubtitle.text = sys.Type;
             _wpSymbol.text = sys.Symbol;
+            _wpType = _wpType ?? _dataContainer.Q<Label>("wp-type");
             _wpType.text = sys.Type;
             _wpCoords.text = $"({sys.X}, {sys.Y})";
             _wpDesc.text = "Click 'OPEN SYSTEM' to view internal waypoints.";
             _extraContentContainer.Clear();
+            _extraInfoTitle.text = "Actions";
             var openBtn = new Button(() => _ = OpenSystem(sys.Symbol)) { text = "OPEN SYSTEM" };
             openBtn.AddToClassList("button");
             openBtn.style.width = 150;
+            openBtn.style.height = 30;
+            openBtn.style.marginTop = 0;
+            openBtn.style.marginBottom = 0;
             _extraContentContainer.Add(openBtn);
-            RenderMap();
+            
+            // Highlight icon on map
+            foreach (var icon in _mapIcons) {
+                if (icon.name == sys.Symbol) icon.AddToClassList("waypoint-selected");
+                else icon.RemoveFromClassList("waypoint-selected");
+            }
         }
 
         private async Task OpenSystem(string symbol)
@@ -352,8 +378,8 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
-                if (_galaxySystems.Count == 0) return;
-                foreach (var s in _galaxySystems) {
+                if (_allGalaxySystems.Count == 0) return;
+                foreach (var s in _allGalaxySystems) {
                     minX = Math.Min(minX, s.X); maxX = Math.Max(maxX, s.X);
                     minY = Math.Min(minY, s.Y); maxY = Math.Max(maxY, s.Y);
                 }
@@ -367,8 +393,8 @@ namespace SpaceTraders.UI
                 }
             }
 
-            float rangeX = Math.Max(50, maxX - minX);
-            float rangeY = Math.Max(50, maxY - minY);
+            float rangeX = Math.Max(100, maxX - minX);
+            float rangeY = Math.Max(100, maxY - minY);
             float width = _mapContainer.layout.width;
             float height = _mapContainer.layout.height;
             if (width <= 0 || height <= 0) return;
@@ -397,19 +423,22 @@ namespace SpaceTraders.UI
             if (minorAlpha > 0) DrawLines(painter, rect, minorSize, new Color(0.2f, 0.2f, 0.2f, minorAlpha * 0.2f));
             if (majorAlpha > 0) DrawLines(painter, rect, majorSize, new Color(0.5f, 0.5f, 0.5f, majorAlpha * 0.5f));
 
-            if (_mapMode == MapMode.Galaxy && _galaxySystems.Count > 1)
+            if (_mapMode == MapMode.Galaxy && _showRoutes && _allGalaxySystems.Count > 1)
             {
-                painter.strokeColor = new Color(0, 0.5f, 1.0f, 0.3f);
+                painter.strokeColor = new Color(0, 0.5f, 1.0f, 0.2f);
                 painter.lineWidth = 1f;
-                for (int i = 0; i < _galaxySystems.Count; i++)
+                // Simplified route drawing for all systems
+                for (int i = 0; i < _allGalaxySystems.Count; i += 2) // Step to reduce drawing overhead if large
                 {
-                    var s1 = _galaxySystems[i];
+                    var s1 = _allGalaxySystems[i];
                     Vector2 p1 = new Vector2(s1.X, s1.Y) * _mapZoom + _mapOffset;
-                    for (int j = i + 1; j < _galaxySystems.Count; j++)
+                    if (!rect.Contains(p1)) continue;
+
+                    for (int j = i + 1; j < Math.Min(i + 5, _allGalaxySystems.Count); j++)
                     {
-                        var s2 = _galaxySystems[j];
+                        var s2 = _allGalaxySystems[j];
                         float dist = Math.Abs(s1.X - s2.X) + Math.Abs(s1.Y - s2.Y);
-                        if (dist < 100) {
+                        if (dist < 150) {
                             Vector2 p2 = new Vector2(s2.X, s2.Y) * _mapZoom + _mapOffset;
                             painter.BeginPath(); painter.MoveTo(p1); painter.LineTo(p2); painter.Stroke();
                         }
@@ -440,21 +469,32 @@ namespace SpaceTraders.UI
         {
             _mapContainer.Clear();
             _mapIcons.Clear();
+            
+            // Only render VisualElements for systems in the CURRENT PAGE of the list to keep perf high
+            // Background dots for everything else could be added to DrawMapContent if needed.
+            
             if (_mapMode == MapMode.Galaxy)
             {
-                foreach (var sys in _galaxySystems)
+                // We show all systems as clickable points
+                foreach (var sys in _allGalaxySystems)
                 {
                     var iconRoot = waypointIconTemplate.Instantiate();
                     var icon = iconRoot.Q<VisualElement>("waypoint-root");
                     var label = iconRoot.Q<Label>("waypoint-name");
                     label.text = sys.Symbol;
                     icon.name = sys.Symbol;
+                    
                     float posX = (sys.X * _mapZoom) + _mapOffset.x;
                     float posY = (sys.Y * _mapZoom) + _mapOffset.y;
                     icon.style.left = posX - 6; icon.style.top = posY - 6;
+
+                    // Visibility optimization: hide label if too zoomed out
+                    label.style.display = _mapZoom > 2.0f ? DisplayStyle.Flex : DisplayStyle.None;
+
                     icon.RegisterCallback<ClickEvent>(evt => {
-                        var entry = _listEntries.FirstOrDefault(e => e.Q<Label>("symbol-label").text == sys.Symbol);
-                        if (entry != null) SelectGalaxySystem(sys, entry);
+                        // Find if it exists in current page
+                        var entry = _listEntries.FirstOrDefault(e => e.name == $"list-{sys.Symbol}");
+                        SelectGalaxySystem(sys, entry);
                         evt.StopImmediatePropagation();
                     });
                     _mapContainer.Add(icon);
@@ -472,9 +512,11 @@ namespace SpaceTraders.UI
                     label.text = wp.symbol;
                     icon.name = wp.symbol;
                     icon.AddToClassList($"wp-{wp.type.ToLower()}");
+
                     float posX = (wp.x * _mapZoom) + _mapOffset.x;
                     float posY = (wp.y * _mapZoom) + _mapOffset.y;
                     icon.style.left = posX - 6; icon.style.top = posY - 6;
+
                     icon.RegisterCallback<ClickEvent>(evt => {
                         SelectWaypoint(wp, icon);
                         evt.StopImmediatePropagation();
@@ -496,6 +538,15 @@ namespace SpaceTraders.UI
             _extraInfoTitle.text = "Loading...";
             _extraContentContainer.Clear();
             _ = FetchWaypointDetails(wp);
+            
+            // Scroll to list entry
+            var entry = _listEntries.FirstOrDefault(e => e.name == $"list-{wp.symbol}");
+            if (entry != null) {
+                foreach (var e in _listEntries) e.RemoveFromClassList("selected-entry");
+                entry.AddToClassList("selected-entry");
+                var scroll = _dataContainer.Q<ScrollView>("system-list");
+                scroll.ScrollTo(entry);
+            }
         }
 
         private async Task FetchWaypointDetails(SystemWaypoint wp)
