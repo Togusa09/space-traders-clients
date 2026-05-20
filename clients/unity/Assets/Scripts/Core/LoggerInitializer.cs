@@ -10,15 +10,10 @@ namespace SpaceTraders.Core
         public static void Initialize()
         {
             // Configure the default logger
-            var config = new LoggerConfig();
-            
-            // Add a standard Console sink (Standard Unity Console)
-            config.SaveToStdout();
-            
-            // Optional: You could add a File sink or others here
-            // config.SaveToFile("logs/game.log");
-
-            Log.Logger = config.CreateLogger();
+            Log.Logger = new LoggerConfig()
+                .MinimumLevel.Debug()
+                .WriteTo.UnityDebugLog()
+                .CreateLogger();
             
             Log.Info("Structured Logging initialized.");
         }
