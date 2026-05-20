@@ -3,97 +3,83 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
+using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
     public static class SecureTokenStorage
     {
-        private const string Salt = "SpaceTradersUnitySalt_4829183";
+        // This is a simplified encryption helper for the prototype.
+        // In a production environment, you would use platform-specific 
+        // secure storage (like Keychain on iOS or Keystore on Android).
 
-        private static byte[] GetEncryptionKey()
-        {
-            string deviceId = SystemInfo.deviceUniqueIdentifier;
-            string rawKey = deviceId + Salt;
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                return sha256.ComputeHash(Encoding.UTF8.GetBytes(rawKey));
-            }
-        }
+        private static readonly byte[] Key = Encoding.UTF8.GetBytes("s3cr3t_p4ss_sp4cetr4ders_12345"); // Must be 32 bytes for AES-256
 
-        public static string Encrypt(string plaintext)
+        public static string Encrypt(string plainText)
         {
-            if (string.IsNullOrEmpty(plaintext)) return string.Empty;
+            if (string.IsNullOrEmpty(plainText)) return plainText;
 
             try
             {
-                byte[] key = GetEncryptionKey();
                 using (Aes aes = Aes.Create())
                 {
-                    aes.Key = key;
+                    aes.Key = Key;
                     aes.GenerateIV();
                     byte[] iv = aes.IV;
 
-                    using (MemoryStream ms = new MemoryStream())
+                    using (var encryptor = aes.CreateEncryptor(aes.Key, aes.IV))
+                    using (var ms = new MemoryStream())
                     {
-                        // Prepend IV to the stream
-                        ms.Write(iv, 0, iv.Length);
-
-                        using (CryptoStream cs = new CryptoStream(ms, aes.CreateEncryptor(), CryptoStreamMode.Write))
+                        ms.Write(iv, 0, iv.Length); // Prepend IV
+                        using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
+                        using (var sw = new StreamWriter(cs))
                         {
-                            byte[] plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
-                            cs.Write(plaintextBytes, 0, plaintextBytes.Length);
-                            cs.FlushFinalBlock();
+                            sw.Write(plainText);
                         }
-
                         return Convert.ToBase64String(ms.ToArray());
                     }
                 }
             }
             catch (Exception e)
             {
-                Debug.LogError($"[SecureTokenStorage] Encryption failed: {e.Message}");
+                Log.Error("[SecureTokenStorage] Encryption failed: {Error}", e.Message);
                 return string.Empty;
             }
         }
 
-        public static string Decrypt(string encryptedText)
+        public static string Decrypt(string cipherText)
         {
-            if (string.IsNullOrEmpty(encryptedText)) return string.Empty;
+            if (string.IsNullOrEmpty(cipherText)) return cipherText;
 
             try
             {
-                byte[] cipherBytes = Convert.FromBase64String(encryptedText);
-                byte[] key = GetEncryptionKey();
+                byte[] fullCipher = Convert.FromBase64String(cipherText);
 
                 using (Aes aes = Aes.Create())
                 {
-                    aes.Key = key;
-                    int ivLength = aes.BlockSize / 8; // 128 bits = 16 bytes
-                    if (cipherBytes.Length < ivLength)
+                    aes.Key = Key;
+                    byte[] iv = new byte[aes.BlockSize / 8];
+                    if (fullCipher.Length < iv.Length)
                     {
-                        Debug.LogError("[SecureTokenStorage] Cipher text is too short to contain IV.");
+                        Log.Error("[SecureTokenStorage] Cipher text is too short to contain IV.");
                         return string.Empty;
                     }
 
-                    byte[] iv = new byte[ivLength];
-                    Array.Copy(cipherBytes, 0, iv, 0, ivLength);
+                    Array.Copy(fullCipher, 0, iv, 0, iv.Length);
                     aes.IV = iv;
 
-                    using (MemoryStream ms = new MemoryStream())
+                    using (var decryptor = aes.CreateDecryptor(aes.Key, aes.IV))
+                    using (var ms = new MemoryStream(fullCipher, iv.Length, fullCipher.Length - iv.Length))
+                    using (var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
+                    using (var sr = new StreamReader(cs))
                     {
-                        using (CryptoStream cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
-                        {
-                            cs.Write(cipherBytes, ivLength, cipherBytes.Length - ivLength);
-                            cs.FlushFinalBlock();
-                        }
-
-                        return Encoding.UTF8.GetString(ms.ToArray());
+                        return sr.ReadToEnd();
                     }
                 }
             }
             catch (Exception e)
             {
-                Debug.LogError($"[SecureTokenStorage] Decryption failed: {e.Message}");
+                Log.Error("[SecureTokenStorage] Decryption failed: {Error}", e.Message);
                 return string.Empty;
             }
         }

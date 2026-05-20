@@ -8,6 +8,7 @@ using SpaceTraders.API;
 using SpaceTraders.API.Models;
 using SpaceTraders.Core;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -101,7 +102,7 @@ namespace SpaceTraders.UI
             }
             catch (Exception e)
             {
-                Debug.LogError($"[Map] Failed to select system {symbol}: {e.Message}");
+                Log.Error("[Map] Failed to select system {System}: {Error}", symbol, e.Message);
             }
         }
 
@@ -161,7 +162,7 @@ namespace SpaceTraders.UI
         private async void InspectWaypoint(string systemSymbol, string wpSymbol)
         {
             // Implementation for Market/Shipyard/Construction inspection
-            Debug.Log($"Inspecting {wpSymbol}...");
+            Log.Info("[Map] Inspecting {Waypoint}...", wpSymbol);
             try
             {
                 // Parallel fetch of available data
@@ -172,8 +173,8 @@ namespace SpaceTraders.UI
                 await Task.WhenAll(marketTask, shipyardTask, constructTask);
 
                 // For simplicity, just log what we found
-                if (marketTask.Result?.data != null) Debug.Log($"[Market] {marketTask.Result.data.exports.Length} exports");
-                if (shipyardTask.Result?.data != null) Debug.Log($"[Shipyard] {shipyardTask.Result.data.ships.Length} ships available");
+                if (marketTask.Result?.data != null) Log.Info("[Map] [Market] {Count} exports found at {Waypoint}", marketTask.Result.data.exports.Length, wpSymbol);
+                if (shipyardTask.Result?.data != null) Log.Info("[Map] [Shipyard] {Count} ships available at {Waypoint}", shipyardTask.Result.data.ships.Length, wpSymbol);
             }
             catch { /* Not all waypoints have all services */ }
         }

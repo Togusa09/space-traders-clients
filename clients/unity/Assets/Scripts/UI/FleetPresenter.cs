@@ -4,6 +4,7 @@ using SpaceTraders.API;
 using SpaceTraders.API.Models;
 using System.Collections.Generic;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -40,27 +41,30 @@ namespace SpaceTraders.UI
                 orbitBtn.clicked += async () => {
                     try {
                         await _apiService.OrbitShip(s.symbol);
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[FleetPresenter] Ship {Symbol} put into orbit.", s.symbol);
+                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Orbit failed: {Error}", e.Message); }
                 };
                 dockBtn.clicked += async () => {
                     try {
                         await _apiService.DockShip(s.symbol);
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[FleetPresenter] Ship {Symbol} docked.", s.symbol);
+                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Dock failed: {Error}", e.Message); }
                 };
 
                 var extractBtn = entry.Q<Button>("BtnExtract");
                 extractBtn.clicked += async () => {
                     try {
                         var res = await _apiService.ExtractResources(s.symbol);
-                        Debug.Log($"Extracted {res.data.extraction.yield.units} of {res.data.extraction.yield.symbol}");
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[FleetPresenter] Ship {Symbol} extracted {Units} of {Symbol2}", s.symbol, res.data.extraction.yield.units, res.data.extraction.yield.symbol);
+                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Extraction failed: {Error}", e.Message); }
                 };
 
                 var refuelBtn = entry.Q<Button>("BtnRefuel");
                 refuelBtn.clicked += async () => {
                     try {
                         await _apiService.RefuelShip(s.symbol);
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[FleetPresenter] Ship {Symbol} refueled.", s.symbol);
+                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Refuel failed: {Error}", e.Message); }
                 };
 
                 // Cargo details
@@ -75,8 +79,8 @@ namespace SpaceTraders.UI
                     sellBtn.clicked += async () => {
                         try {
                             var res = await _apiService.SellCargo(s.symbol, item.symbol, item.units);
-                            Debug.Log($"Sold {item.units} {item.symbol} for {res.data.transaction.totalPrice} credits");
-                        } catch (System.Exception e) { Debug.LogError(e.Message); }
+                            Log.Info("[FleetPresenter] Sold {Units} {Symbol} for {Price} credits", item.units, item.symbol, res.data.transaction.totalPrice);
+                        } catch (System.Exception e) { Log.Error("[FleetPresenter] Sell failed: {Error}", e.Message); }
                     };
                     row.Add(sellBtn);
                     cargoList.Add(row);
@@ -95,8 +99,8 @@ namespace SpaceTraders.UI
                         
                         if (s.nav.status == "DOCKED") await _apiService.OrbitShip(s.symbol);
                         var res = await _apiService.NavigateShip(s.symbol, target);
-                        Debug.Log($"Navigating to {target}. Arrival: {res.data.nav.route.arrivalTime}");
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[FleetPresenter] Navigating {Symbol} to {Target}. Arrival: {Arrival}", s.symbol, target, res.data.nav.route.arrivalTime);
+                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Navigation failed: {Error}", e.Message); }
                 };
 
                 list.Add(entry);

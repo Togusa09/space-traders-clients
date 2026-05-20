@@ -4,6 +4,7 @@ using SpaceTraders.API;
 using SpaceTraders.API.Models;
 using System.Collections.Generic;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -40,8 +41,8 @@ namespace SpaceTraders.UI
                 acceptBtn.clicked += async () => {
                     try {
                         await _apiService.AcceptContract(c.id);
-                        // Dashboard polling will eventually refresh this, or we could trigger a refresh event
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[ContractPresenter] Contract {Id} accepted.", c.id);
+                    } catch (System.Exception e) { Log.Error("[ContractPresenter] Accept failed: {Error}", e.Message); }
                 };
 
                 var fulfillBtn = entry.Q<Button>("BtnFulfill");
@@ -60,8 +61,6 @@ namespace SpaceTraders.UI
                     // Quick delivery button (simplified)
                     var deliverBtn = new Button { text = "Deliver" };
                     deliverBtn.clicked += async () => {
-                        // In a real app, you'd pick a ship. Here we'll just log or show a popup if we had one.
-                        // For now, let's try to find a ship with this cargo.
                         try {
                             var shipsRes = await _apiService.GetShips();
                             foreach (var ship in shipsRes.data)
@@ -74,12 +73,13 @@ namespace SpaceTraders.UI
                                         {
                                             int unitsToDeliver = Mathf.Min(item.units, d.unitsRequired - d.unitsFulfilled);
                                             await _apiService.DeliverContractCargo(c.id, ship.symbol, d.tradeSymbol, unitsToDeliver);
+                                            Log.Info("[ContractPresenter] Delivered {Units} {Symbol} to {Waypoint}", unitsToDeliver, d.tradeSymbol, d.destinationSymbol);
                                             break;
                                         }
                                     }
                                 }
                             }
-                        } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        } catch (System.Exception e) { Log.Error("[ContractPresenter] Delivery failed: {Error}", e.Message); }
                     };
                     delList.Add(deliverBtn);
                 }
@@ -88,7 +88,8 @@ namespace SpaceTraders.UI
                 fulfillBtn.clicked += async () => {
                     try {
                         await _apiService.FulfillContract(c.id);
-                    } catch (System.Exception e) { Debug.LogError(e.Message); }
+                        Log.Info("[ContractPresenter] Contract {Id} fulfilled.", c.id);
+                    } catch (System.Exception e) { Log.Error("[ContractPresenter] Fulfill failed: {Error}", e.Message); }
                 };
 
                 list.Add(entry);

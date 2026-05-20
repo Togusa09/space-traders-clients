@@ -7,6 +7,7 @@ using UnityEngine;
 using SpaceTraders.API;
 using SpaceTraders.API.Models;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
@@ -35,11 +36,11 @@ namespace SpaceTraders.Core
         private void Start()
         {
             int existingCount = _dbManager.GetIndexedSystemCount();
-            Debug.Log($"[UniverseSyncManager] Initial check. Indexed systems: {existingCount}");
+            Log.Info("[UniverseSyncManager] Initial check. Indexed systems: {Count}", existingCount);
             
             if (existingCount == 0)
             {
-                Debug.Log("[UniverseSyncManager] DB empty, auto-starting sync...");
+                Log.Info("[UniverseSyncManager] DB empty, auto-starting sync...");
                 StartSync();
             }
         }
@@ -56,14 +57,14 @@ namespace SpaceTraders.Core
             if (!_isSyncing) return;
             _cts?.Cancel();
             _isSyncing = false;
-            Debug.Log("[UniverseSyncManager] Sync cancel requested.");
+            Log.Info("[UniverseSyncManager] Sync cancel requested.");
         }
 
         private async Task SyncUniverseAsync(CancellationToken token)
         {
             _isSyncing = true;
             Progress = 0f;
-            Debug.Log("[UniverseSyncManager] Starting async background universe sync...");
+            Log.Info("[UniverseSyncManager] Starting async background universe sync...");
 
             CurrentPage = 1;
             TotalPages = 1;
@@ -75,7 +76,7 @@ namespace SpaceTraders.Core
                 {
                     if (token.IsCancellationRequested) break;
 
-                    Debug.Log($"[UniverseSyncManager] Requesting page {CurrentPage}...");
+                    Log.Info("[UniverseSyncManager] Requesting page {Page}...", CurrentPage);
                     SystemsResponse response = await _apiService.GetSystems(CurrentPage, limit);
 
                     if (response != null && response.data != null)
@@ -83,7 +84,7 @@ namespace SpaceTraders.Core
                         TotalSystemsExpected = response.meta.total;
                         TotalPages = (int)System.Math.Ceiling((double)response.meta.total / response.meta.limit);
                         
-                        Debug.Log($"[UniverseSyncManager] Received {response.data.Length} systems from API (Total Expected: {TotalSystemsExpected}).");
+                        Log.Info("[UniverseSyncManager] Received {Count} systems from API (Total Expected: {Total}).", response.data.Length, TotalSystemsExpected);
 
                         var indexed = response.data.Select(s => new DatabaseManager.IndexedSystem {
                             Symbol = s.symbol,
@@ -97,7 +98,7 @@ namespace SpaceTraders.Core
                         _dbManager.StoreSystems(indexed);
                         
                         int newCount = _dbManager.GetIndexedSystemCount();
-                        Debug.Log($"[UniverseSyncManager] Page {CurrentPage} stored. Total indexed: {newCount}");
+                        Log.Info("[UniverseSyncManager] Page {Page} stored. Total indexed: {Total}", CurrentPage, newCount);
 
                         Progress = (float)CurrentPage / TotalPages;
                         CurrentPage++;
@@ -107,7 +108,7 @@ namespace SpaceTraders.Core
                     }
                     else
                     {
-                        Debug.LogError($"[UniverseSyncManager] Sync failed on page {CurrentPage}: No data in response");
+                        Log.Error("[UniverseSyncManager] Sync failed on page {Page}: No data in response", CurrentPage);
                         await Task.Delay(5000, token);
                     }
 
@@ -115,16 +116,16 @@ namespace SpaceTraders.Core
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("[UniverseSyncManager] Sync task cancelled.");
+                Log.Info("[UniverseSyncManager] Sync task cancelled.");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[UniverseSyncManager] Sync encountered a critical error: {e.Message}");
+                Log.Error("[UniverseSyncManager] Sync encountered a critical error: {Error}", e.Message);
             }
             finally
             {
                 _isSyncing = false;
-                Debug.Log("[UniverseSyncManager] Universe sync process terminated.");
+                Log.Info("[UniverseSyncManager] Universe sync process terminated.");
             }
         }
     }

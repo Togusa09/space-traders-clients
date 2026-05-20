@@ -6,6 +6,7 @@ using SpaceTraders.Core;
 using UnityEngine;
 using Newtonsoft.Json;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.API
 {
@@ -53,20 +54,20 @@ namespace SpaceTraders.API
             {
                 try
                 {
-                    Debug.Log($"[APIService] Using cached systems for page {page}");
+                    Log.Info("[APIService] Using cached systems for page {Page}", page);
                     return JsonConvert.DeserializeObject<SystemsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[APIService] Failed to parse cached systems: {e.Message}");
+                    Log.Warning("[APIService] Failed to parse cached systems: {Error}", e.Message);
                 }
             }
 
             string endpoint = $"/systems?page={page}&limit={limit}";
-            Debug.Log($"[APIService] Fetching systems page {page} from network...");
+            Log.Info("[APIService] Fetching systems page {Page} from network...", page);
             string json = await _client.GetRequestRaw(endpoint);
             
-            Debug.Log($"[APIService] Received systems page {page} from network. Caching...");
+            Log.Info("[APIService] Received systems page {Page} from network. Caching...", page);
             _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<SystemsResponse>(json);
         }
@@ -80,20 +81,20 @@ namespace SpaceTraders.API
             {
                 try
                 {
-                    Debug.Log($"[APIService] Using cached details for system {systemSymbol}");
+                    Log.Info("[APIService] Using cached details for system {System}", systemSymbol);
                     return JsonConvert.DeserializeObject<SystemResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[APIService] Failed to parse cached system {systemSymbol}: {e.Message}");
+                    Log.Warning("[APIService] Failed to parse cached system {System}: {Error}", systemSymbol, e.Message);
                 }
             }
 
             string endpoint = $"/systems/{systemSymbol}";
-            Debug.Log($"[APIService] Fetching system {systemSymbol} details from network...");
+            Log.Info("[APIService] Fetching system {System} details from network...", systemSymbol);
             string json = await _client.GetRequestRaw(endpoint);
             
-            Debug.Log($"[APIService] Received system {systemSymbol} from network. Caching...");
+            Log.Info("[APIService] Received system {System} from network. Caching...", systemSymbol);
             _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<SystemResponse>(json);
         }
@@ -107,12 +108,12 @@ namespace SpaceTraders.API
             {
                 try
                 {
-                    Debug.Log($"[APIService] Using cached waypoints for system {systemSymbol}");
+                    Log.Info("[APIService] Using cached waypoints for system {System}", systemSymbol);
                     return JsonConvert.DeserializeObject<SystemWaypointsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[APIService] Failed to parse cached waypoints for system {systemSymbol}: {e.Message}");
+                    Log.Warning("[APIService] Failed to parse cached waypoints for system {System}: {Error}", systemSymbol, e.Message);
                 }
             }
 
@@ -126,7 +127,7 @@ namespace SpaceTraders.API
                 while (true)
                 {
                     string endpoint = $"/systems/{systemSymbol}/waypoints?page={page}&limit={limit}";
-                    Debug.Log($"[APIService] Fetching waypoints for system {systemSymbol} page {page} from network...");
+                    Log.Info("[APIService] Fetching waypoints for system {System} page {Page} from network...", systemSymbol, page);
                     string json = await _client.GetRequestRaw(endpoint);
                     var pageRes = JsonConvert.DeserializeObject<SystemWaypointsResponse>(json);
                     
@@ -159,7 +160,7 @@ namespace SpaceTraders.API
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[APIService] Error fetching system waypoints: {ex.Message}");
+                Log.Error("[APIService] Error fetching system waypoints: {Error}", ex.Message);
                 throw;
             }
 
@@ -208,19 +209,19 @@ namespace SpaceTraders.API
             {
                 try
                 {
-                    Debug.Log("[APIService] Using cached factions");
+                    Log.Info("[APIService] Using cached factions");
                     return JsonConvert.DeserializeObject<FactionsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[APIService] Failed to parse cached factions: {e.Message}");
+                    Log.Warning("[APIService] Failed to parse cached factions: {Error}", e.Message);
                 }
             }
 
-            Debug.Log("[APIService] Fetching factions from network...");
+            Log.Info("[APIService] Fetching factions from network...");
             string json = await _client.GetRequestRaw("/factions");
             
-            Debug.Log("[APIService] Received factions from network. Caching...");
+            Log.Info("[APIService] Received factions from network. Caching...");
             _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<FactionsResponse>(json);
         }

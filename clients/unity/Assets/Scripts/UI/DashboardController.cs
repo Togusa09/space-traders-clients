@@ -6,6 +6,7 @@ using SpaceTraders.Core;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -97,7 +98,7 @@ namespace SpaceTraders.UI
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[Dashboard] Refresh failed: {e.Message}");
+                Log.Error("[Dashboard] Refresh failed: {Error}", e.Message);
             }
         }
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using SQLite;
 using UnityEngine;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
@@ -44,7 +45,7 @@ namespace SpaceTraders.Core
                 string dir = Path.GetDirectoryName(_dbPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-                Debug.Log($"[DatabaseManager] Connecting to {_dbPath}");
+                Log.Info("[DatabaseManager] Connecting to {Path}", _dbPath);
                 _db = new SQLiteConnection(_dbPath);
                 
                 // Use ExecuteScalar for pragmas that return values to avoid "not an error" exceptions
@@ -55,11 +56,11 @@ namespace SpaceTraders.Core
                 _db.CreateTable<ApiCacheEntry>();
                 _db.CreateTable<IndexedSystem>();
                 
-                Debug.Log($"[DatabaseManager] SQLite initialized successfully.");
+                Log.Info("[DatabaseManager] SQLite initialized successfully.");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[DatabaseManager] Critical failure during initialization: {e.Message}\n{e.StackTrace}");
+                Log.Error("[DatabaseManager] Critical failure during initialization: {Error}\n{StackTrace}", e.Message, e.StackTrace);
                 _db = null;
             }
         }
@@ -80,7 +81,7 @@ namespace SpaceTraders.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[DatabaseManager] SetCache failed: {e.Message}");
+                Log.Error("[DatabaseManager] SetCache failed: {Error}", e.Message);
             }
         }
 
@@ -102,7 +103,7 @@ namespace SpaceTraders.Core
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[DatabaseManager] GetCache failed: {e.Message}");
+                Log.Warning("[DatabaseManager] GetCache failed: {Error}", e.Message);
             }
             return null;
         }
@@ -115,11 +116,11 @@ namespace SpaceTraders.Core
             {
                 db.DeleteAll<ApiCacheEntry>();
                 db.DeleteAll<IndexedSystem>();
-                Debug.Log("[DatabaseManager] All cached data cleared.");
+                Log.Info("[DatabaseManager] All cached data cleared.");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[DatabaseManager] ClearCache failed: {e.Message}");
+                Log.Error("[DatabaseManager] ClearCache failed: {Error}", e.Message);
             }
         }
 
@@ -145,7 +146,7 @@ namespace SpaceTraders.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[DatabaseManager] StoreSystems failed: {e.Message}");
+                Log.Error("[DatabaseManager] StoreSystems failed: {Error}", e.Message);
             }
         }
 
@@ -164,7 +165,7 @@ namespace SpaceTraders.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[DatabaseManager] Search failed: {e.Message}");
+                Log.Error("[DatabaseManager] Search failed: {Error}", e.Message);
                 return new List<IndexedSystem>();
             }
         }

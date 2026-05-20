@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
 using SpaceTraders.API;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -108,11 +109,11 @@ namespace SpaceTraders.UI
                 _client.SetToken(_agentTokenInput.value);
                 var response = await _apiService.GetMyAgent();
                 
-                Debug.Log($"[SettingsUI] Token validated for agent: {response.data.symbol}");
+                Log.Info("[SettingsUI] Token validated for agent: {Agent}", response.data.symbol);
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[SettingsUI] Failed to validate token: {ex.Message}");
+                Log.Error("[SettingsUI] Failed to validate token: {Error}", ex.Message);
             }
             finally
             {
