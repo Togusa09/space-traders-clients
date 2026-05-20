@@ -56,7 +56,7 @@ namespace SpaceTraders.Core
                 
                 // Use ExecuteScalar for pragmas that return values to avoid "not an error" exceptions
                 try { _db.ExecuteScalar<string>("PRAGMA journal_mode = WAL"); } catch { }
-                try { _db.ExecuteScalar<int>("PRAGMA synchronous = OFF"); } catch { }
+                try { _db.ExecuteScalar<int>("PRAGMA synchronous = NORMAL"); } catch { }
                 
                 // Create tables
                 _db.CreateTable<ApiCacheEntry>();

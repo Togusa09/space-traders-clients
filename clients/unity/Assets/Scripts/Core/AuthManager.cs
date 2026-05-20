@@ -1,7 +1,15 @@
+using System;
 using UnityEngine;
 
 namespace SpaceTraders.Core
 {
+    public enum TokenState
+    {
+        Unknown,
+        Valid,
+        Invalid
+    }
+
     public class AuthManager : MonoBehaviour
     {
         private const string AgentTokenKey = "SpaceTraders_AgentToken";
@@ -27,6 +35,9 @@ namespace SpaceTraders.Core
 
         public string AgentToken { get; private set; }
         public bool HasAgentToken => !string.IsNullOrEmpty(AgentToken);
+        public TokenState CurrentTokenState { get; private set; } = TokenState.Unknown;
+
+        public static event Action OnTokenUnauthorized;
 
         private void Awake()
         {
@@ -44,9 +55,11 @@ namespace SpaceTraders.Core
         public void SaveAgentToken(string token)
         {
             AgentToken = token;
-            PlayerPrefs.SetString(AgentTokenKey, token);
+            string encryptedToken = SecureTokenStorage.Encrypt(token);
+            PlayerPrefs.SetString(AgentTokenKey, encryptedToken);
             PlayerPrefs.Save();
-            Debug.Log($"[AuthManager] Token saved: {(string.IsNullOrEmpty(token) ? "EMPTY" : "EXISTS")}");
+            CurrentTokenState = string.IsNullOrEmpty(token) ? TokenState.Unknown : TokenState.Valid;
+            Debug.Log($"[AuthManager] Token saved and encrypted: {(string.IsNullOrEmpty(token) ? "EMPTY" : "EXISTS")}");
         }
 
         public void ClearTokens()
@@ -54,12 +67,31 @@ namespace SpaceTraders.Core
             AgentToken = null;
             PlayerPrefs.DeleteKey(AgentTokenKey);
             PlayerPrefs.Save();
+            CurrentTokenState = TokenState.Unknown;
         }
 
         public void LoadTokens()
         {
-            AgentToken = PlayerPrefs.GetString(AgentTokenKey, string.Empty);
-            Debug.Log($"[AuthManager] Token loaded: {(string.IsNullOrEmpty(AgentToken) ? "EMPTY" : "EXISTS")}");
+            string encryptedToken = PlayerPrefs.GetString(AgentTokenKey, string.Empty);
+            if (!string.IsNullOrEmpty(encryptedToken))
+            {
+                AgentToken = SecureTokenStorage.Decrypt(encryptedToken);
+                CurrentTokenState = string.IsNullOrEmpty(AgentToken) ? TokenState.Invalid : TokenState.Valid;
+            }
+            else
+            {
+                AgentToken = string.Empty;
+                CurrentTokenState = TokenState.Unknown;
+            }
+            Debug.Log($"[AuthManager] Token loaded and decrypted: {(string.IsNullOrEmpty(AgentToken) ? "EMPTY" : "EXISTS")} (State: {CurrentTokenState})");
+        }
+
+        public void HandleTokenUnauthorized()
+        {
+            CurrentTokenState = TokenState.Invalid;
+            ClearTokens();
+            OnTokenUnauthorized?.Invoke();
         }
     }
 }
+
