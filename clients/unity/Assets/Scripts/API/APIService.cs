@@ -90,6 +90,33 @@ namespace SpaceTraders.API
             return JsonUtility.FromJson<SystemsResponse>(json);
         }
 
+        public async Task<SystemResponse> GetSystem(string systemSymbol)
+        {
+            string cacheKey = $"system_{systemSymbol}";
+            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+
+            if (!string.IsNullOrEmpty(cachedJson))
+            {
+                try
+                {
+                    Debug.Log($"[APIService] Using cached details for system {systemSymbol}");
+                    return JsonUtility.FromJson<SystemResponse>(cachedJson);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[APIService] Failed to parse cached system {systemSymbol}: {e.Message}");
+                }
+            }
+
+            string endpoint = $"/systems/{systemSymbol}";
+            Debug.Log($"[APIService] Fetching system {systemSymbol} details from network...");
+            string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
+            
+            Debug.Log($"[APIService] Received system {systemSymbol} from network. Caching...");
+            DatabaseManager.Instance.SetCache(cacheKey, json);
+            return JsonUtility.FromJson<SystemResponse>(json);
+        }
+
         public async Task<MarketResponse> GetMarket(string systemSymbol, string waypointSymbol)
         {
             return await SpaceTradersClient.Instance.GetRequest<MarketResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/market");

@@ -23,6 +23,19 @@
             
             <ui:VisualElement name="map-container" class="system-map">
                 <!-- Waypoints will be generated here -->
+                
+                <!-- Floating Legend -->
+                <ui:VisualElement name="map-legend" style="position: absolute; bottom: 10; right: 10; background-color: rgba(30, 30, 30, 0.9); border-radius: 5px; border-width: 1px; border-color: rgb(60, 60, 60); padding: 5px; max-width: 180px;">
+                    <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center;">
+                        <ui:Label text="MAP LEGEND" style="font-size: 10px; -unity-font-style: bold; color: gray;" />
+                        <ui:Button name="legend-toggle" text="-" style="width: 20px; height: 15px; font-size: 10px; margin: 0; padding: 0; background-color: transparent; border-width: 0;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="legend-content" style="margin-top: 5px;">
+                        <ui:ScrollView style="max-height: 150px;">
+                            <ui:VisualElement name="legend-items" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- Waypoint Details Area -->

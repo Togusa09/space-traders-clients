@@ -225,12 +225,26 @@ namespace SpaceTraders.API.Models
         public string type;
         public int x;
         public int y;
+        public string orbits;
+        public WaypointOrbital[] orbitals;
+    }
+
+    [Serializable]
+    public class WaypointOrbital
+    {
+        public string symbol;
     }
 
     [Serializable]
     public class SystemFaction
     {
         public string symbol;
+    }
+
+    [Serializable]
+    public class SystemResponse
+    {
+        public SystemData data;
     }
 
     [Serializable]

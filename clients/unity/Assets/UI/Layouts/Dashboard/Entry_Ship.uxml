@@ -1,6 +1,9 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:VisualElement class="dashboard-entry">
-        <ui:Label name="symbol-label" text="Symbol: SHIP-SYMBOL" class="label-important" />
+        <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center;">
+            <ui:Label name="symbol-label" text="Symbol: SHIP-SYMBOL" class="label-important" />
+            <ui:Button name="show-on-map-btn" text="SHOW ON MAP" class="button" style="height: 25px; font-size: 10px; margin: 0;" />
+        </ui:VisualElement>
         <ui:Label name="details-label" text="Role: ROLE | System: SYSTEM" />
         <ui:Label name="status-label" text="Status: STATUS | Fuel: 0/0" />
     </ui:VisualElement>
