@@ -34,6 +34,13 @@ namespace SpaceTraders.UI
             UpdateButtonStates();
         }
 
+        private void OnDisable()
+        {
+            if (_playButton != null) _playButton.clicked -= OnPlayClicked;
+            if (_settingsButton != null) _settingsButton.clicked -= OnSettingsClicked;
+            if (_exitButton != null) _exitButton.clicked -= OnExitClicked;
+        }
+
         private void UpdateButtonStates()
         {
             if (_playButton != null)

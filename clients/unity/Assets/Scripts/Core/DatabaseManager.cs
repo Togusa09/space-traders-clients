@@ -30,6 +30,22 @@ namespace SpaceTraders.Core
         private string _dbPath;
         private SQLiteConnection _db;
 
+        public SQLiteConnection Connection
+        {
+            get
+            {
+                if (_db == null)
+                {
+                    if (string.IsNullOrEmpty(_dbPath))
+                    {
+                        _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
+                    }
+                    InitializeDatabase();
+                }
+                return _db;
+            }
+        }
+
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -40,7 +56,10 @@ namespace SpaceTraders.Core
             _instance = this;
             DontDestroyOnLoad(gameObject);
 
-            _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
+            if (string.IsNullOrEmpty(_dbPath))
+            {
+                _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
+            }
             InitializeDatabase();
         }
 
@@ -73,7 +92,8 @@ namespace SpaceTraders.Core
 
         public void SetCache(string key, string json)
         {
-            if (_db == null) return;
+            var db = Connection;
+            if (db == null) return;
             try
             {
                 var entry = new ApiCacheEntry
@@ -82,7 +102,7 @@ namespace SpaceTraders.Core
                     JsonData = json,
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
-                _db.InsertOrReplace(entry);
+                db.InsertOrReplace(entry);
             }
             catch (Exception e)
             {
@@ -92,10 +112,11 @@ namespace SpaceTraders.Core
 
         public string GetCache(string key, long maxAgeSeconds)
         {
-            if (_db == null) return null;
+            var db = Connection;
+            if (db == null) return null;
             try
             {
-                var entry = _db.Table<ApiCacheEntry>().Where(x => x.CacheKey == key).FirstOrDefault();
+                var entry = db.Table<ApiCacheEntry>().Where(x => x.CacheKey == key).FirstOrDefault();
                 if (entry != null)
                 {
                     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -114,11 +135,12 @@ namespace SpaceTraders.Core
 
         public void ClearCache()
         {
-            if (_db == null) return;
+            var db = Connection;
+            if (db == null) return;
             try
             {
-                _db.DeleteAll<ApiCacheEntry>();
-                _db.DeleteAll<IndexedSystem>();
+                db.DeleteAll<ApiCacheEntry>();
+                db.DeleteAll<IndexedSystem>();
                 Debug.Log("[DatabaseManager] All cached data cleared.");
             }
             catch (Exception e)
@@ -131,18 +153,20 @@ namespace SpaceTraders.Core
 
         public List<IndexedSystem> GetAllSystems()
         {
-            if (_db == null) return new List<IndexedSystem>();
-            try { return _db.Table<IndexedSystem>().ToList(); }
+            var db = Connection;
+            if (db == null) return new List<IndexedSystem>();
+            try { return db.Table<IndexedSystem>().ToList(); }
             catch { return new List<IndexedSystem>(); }
         }
 
         public void StoreSystems(IEnumerable<IndexedSystem> systems)
         {
-            if (_db == null) return;
+            var db = Connection;
+            if (db == null) return;
             try
             {
-                _db.RunInTransaction(() => {
-                    foreach (var s in systems) _db.InsertOrReplace(s);
+                db.RunInTransaction(() => {
+                    foreach (var s in systems) db.InsertOrReplace(s);
                 });
             }
             catch (Exception e)
@@ -153,10 +177,11 @@ namespace SpaceTraders.Core
 
         public List<IndexedSystem> SearchSystems(string symbolPattern)
         {
-            if (_db == null) return new List<IndexedSystem>();
+            var db = Connection;
+            if (db == null) return new List<IndexedSystem>();
             try 
             {
-                var query = _db.Table<IndexedSystem>();
+                var query = db.Table<IndexedSystem>();
                 if (!string.IsNullOrEmpty(symbolPattern))
                 {
                     query = query.Where(s => s.Symbol.Contains(symbolPattern));
@@ -172,8 +197,9 @@ namespace SpaceTraders.Core
 
         public int GetIndexedSystemCount()
         {
-            if (_db == null) return 0;
-            try { return _db.Table<IndexedSystem>().Count(); }
+            var db = Connection;
+            if (db == null) return 0;
+            try { return db.Table<IndexedSystem>().Count(); }
             catch { return 0; }
         }
 

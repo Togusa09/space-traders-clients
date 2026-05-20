@@ -62,12 +62,12 @@ namespace SpaceTraders.Core
             Debug.Log($"[AuthManager] Token saved and encrypted: {(string.IsNullOrEmpty(token) ? "EMPTY" : "EXISTS")}");
         }
 
-        public void ClearTokens()
+        public void ClearTokens(bool keepInvalidState = false)
         {
             AgentToken = null;
             PlayerPrefs.DeleteKey(AgentTokenKey);
             PlayerPrefs.Save();
-            CurrentTokenState = TokenState.Unknown;
+            CurrentTokenState = keepInvalidState ? TokenState.Invalid : TokenState.Unknown;
         }
 
         public void LoadTokens()
@@ -88,8 +88,7 @@ namespace SpaceTraders.Core
 
         public void HandleTokenUnauthorized()
         {
-            CurrentTokenState = TokenState.Invalid;
-            ClearTokens();
+            ClearTokens(keepInvalidState: true);
             OnTokenUnauthorized?.Invoke();
         }
     }

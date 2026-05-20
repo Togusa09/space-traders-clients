@@ -59,17 +59,35 @@ namespace SpaceTraders.UI
             _backButton.clicked += OnBackClicked;
             _testAgentButton.clicked += OnTestAgentClicked;
 
-            _startSyncBtn.clicked += () => UniverseSyncManager.Instance.StartSync();
-            _stopSyncBtn.clicked += () => UniverseSyncManager.Instance.StopSync();
-            _clearCacheBtn.clicked += () => {
-                DatabaseManager.Instance.ClearCache();
-                _statusLabel.text = "Database cleared.";
-            };
+            _startSyncBtn.clicked += OnStartSyncClicked;
+            _stopSyncBtn.clicked += OnStopSyncClicked;
+            _clearCacheBtn.clicked += OnClearCacheClicked;
 
-            _popupCloseButton.clicked += () => {
-                _popupOverlay.style.display = DisplayStyle.None;
-                _popupInstance.style.display = DisplayStyle.None;
-            };
+            _popupCloseButton.clicked += OnPopupCloseClicked;
+        }
+
+        private void OnDisable()
+        {
+            if (_saveButton != null) _saveButton.clicked -= OnSaveClicked;
+            if (_backButton != null) _backButton.clicked -= OnBackClicked;
+            if (_testAgentButton != null) _testAgentButton.clicked -= OnTestAgentClicked;
+            if (_startSyncBtn != null) _startSyncBtn.clicked -= OnStartSyncClicked;
+            if (_stopSyncBtn != null) _stopSyncBtn.clicked -= OnStopSyncClicked;
+            if (_clearCacheBtn != null) _clearCacheBtn.clicked -= OnClearCacheClicked;
+            if (_popupCloseButton != null) _popupCloseButton.clicked -= OnPopupCloseClicked;
+        }
+
+        private void OnStartSyncClicked() => UniverseSyncManager.Instance.StartSync();
+        private void OnStopSyncClicked() => UniverseSyncManager.Instance.StopSync();
+        private void OnClearCacheClicked()
+        {
+            DatabaseManager.Instance.ClearCache();
+            _statusLabel.text = "Database cleared.";
+        }
+        private void OnPopupCloseClicked()
+        {
+            _popupOverlay.style.display = DisplayStyle.None;
+            _popupInstance.style.display = DisplayStyle.None;
         }
 
         private void Update()

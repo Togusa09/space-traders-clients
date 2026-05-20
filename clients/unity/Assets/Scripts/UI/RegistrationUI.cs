@@ -34,7 +34,18 @@ namespace SpaceTraders.UI
             _factionDropdown.value = "COSMIC";
 
             _registerButton.clicked += OnRegisterClicked;
-            _backButton.clicked += () => SceneManager.LoadScene(mainMenuSceneName);
+            _backButton.clicked += OnBackClicked;
+        }
+
+        private void OnDisable()
+        {
+            if (_registerButton != null) _registerButton.clicked -= OnRegisterClicked;
+            if (_backButton != null) _backButton.clicked -= OnBackClicked;
+        }
+
+        private void OnBackClicked()
+        {
+            SceneManager.LoadScene(mainMenuSceneName);
         }
 
         private async void OnRegisterClicked()

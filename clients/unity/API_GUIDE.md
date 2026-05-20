@@ -1,6 +1,6 @@
 # API Client Implementation Details
 
-The SpaceTraders API client is implemented using `UnityWebRequest` and `JsonUtility`.
+The SpaceTraders API client is implemented using `UnityWebRequest` and `Newtonsoft.Json`.
 
 ## Components
 

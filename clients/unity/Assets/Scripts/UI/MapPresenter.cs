@@ -390,7 +390,21 @@ namespace SpaceTraders.UI
                 {
                     CurrentSystem = res.data;
 
-                    if (CurrentSystem.waypoints != null && CurrentSystem.waypoints.Length > 0 && !string.IsNullOrEmpty(CurrentSystem.waypoints[0].traits == null ? "" : "hasTraits"))
+                    bool waypointsComplete = false;
+                    if (CurrentSystem.waypoints != null && CurrentSystem.waypoints.Length > 0)
+                    {
+                        waypointsComplete = true;
+                        foreach (var wp in CurrentSystem.waypoints)
+                        {
+                            if (wp.traits == null)
+                            {
+                                waypointsComplete = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (waypointsComplete)
                     {
                         // Loaded successfully
                     }

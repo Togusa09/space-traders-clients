@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using SpaceTraders.API.Models;
 using SpaceTraders.Core;
 using UnityEngine;
+using Newtonsoft.Json;
 
 namespace SpaceTraders.API
 {
@@ -74,7 +75,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Debug.Log($"[APIService] Using cached systems for page {page}");
-                    return JsonUtility.FromJson<SystemsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<SystemsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -88,7 +89,7 @@ namespace SpaceTraders.API
             
             Debug.Log($"[APIService] Received systems page {page} from network. Caching...");
             DatabaseManager.Instance.SetCache(cacheKey, json);
-            return JsonUtility.FromJson<SystemsResponse>(json);
+            return JsonConvert.DeserializeObject<SystemsResponse>(json);
         }
 
         public async Task<SystemResponse> GetSystem(string systemSymbol)
@@ -101,7 +102,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Debug.Log($"[APIService] Using cached details for system {systemSymbol}");
-                    return JsonUtility.FromJson<SystemResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<SystemResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -115,7 +116,7 @@ namespace SpaceTraders.API
             
             Debug.Log($"[APIService] Received system {systemSymbol} from network. Caching...");
             DatabaseManager.Instance.SetCache(cacheKey, json);
-            return JsonUtility.FromJson<SystemResponse>(json);
+            return JsonConvert.DeserializeObject<SystemResponse>(json);
         }
 
         public async Task<SystemWaypointsResponse> GetSystemWaypoints(string systemSymbol)
@@ -128,7 +129,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Debug.Log($"[APIService] Using cached waypoints for system {systemSymbol}");
-                    return JsonUtility.FromJson<SystemWaypointsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<SystemWaypointsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -148,7 +149,7 @@ namespace SpaceTraders.API
                     string endpoint = $"/systems/{systemSymbol}/waypoints?page={page}&limit={limit}";
                     Debug.Log($"[APIService] Fetching waypoints for system {systemSymbol} page {page} from network...");
                     string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
-                    var pageRes = JsonUtility.FromJson<SystemWaypointsResponse>(json);
+                    var pageRes = JsonConvert.DeserializeObject<SystemWaypointsResponse>(json);
                     
                     if (pageRes != null && pageRes.data != null)
                     {
@@ -172,7 +173,7 @@ namespace SpaceTraders.API
                 if (firstPage != null)
                 {
                     firstPage.data = allWaypoints.ToArray();
-                    string fullJson = JsonUtility.ToJson(firstPage);
+                    string fullJson = JsonConvert.SerializeObject(firstPage);
                     DatabaseManager.Instance.SetCache(cacheKey, fullJson);
                     return firstPage;
                 }
@@ -229,7 +230,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Debug.Log("[APIService] Using cached factions");
-                    return JsonUtility.FromJson<FactionsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<FactionsResponse>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -242,7 +243,7 @@ namespace SpaceTraders.API
             
             Debug.Log("[APIService] Received factions from network. Caching...");
             DatabaseManager.Instance.SetCache(cacheKey, json);
-            return JsonUtility.FromJson<FactionsResponse>(json);
+            return JsonConvert.DeserializeObject<FactionsResponse>(json);
         }
 
         public async Task<AcceptContractResponse> AcceptContract(string contractId)

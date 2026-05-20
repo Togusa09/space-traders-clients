@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 using SpaceTraders.Core;
+using Newtonsoft.Json;
 
 namespace SpaceTraders.API
 {
@@ -104,14 +105,21 @@ namespace SpaceTraders.API
             return sanitized;
         }
 
-        private void LogResponse(string endpoint, string content, bool isError = false)
+        private void LogResponse(string endpoint, string content, bool isError = false, long responseCode = 0)
         {
             string sanitized = SanitizeResponse(content);
             if (isError)
             {
-                Debug.LogError($"[SpaceTradersClient] Failed response for {endpoint}:\n{sanitized}");
+                if (Debug.isDebugBuild || Application.isEditor)
+                {
+                    Debug.LogError($"[SpaceTradersClient] Failed response for {endpoint} (Code: {responseCode}):\n{sanitized}");
+                }
+                else
+                {
+                    Debug.LogError($"[SpaceTradersClient] Failed response for {endpoint} (Code: {responseCode})");
+                }
             }
-            else if (Debug.isDebugBuild)
+            else if (Debug.isDebugBuild || Application.isEditor)
             {
                 Debug.Log($"[SpaceTradersClient] Success response for {endpoint} ({content.Length} bytes):\n{sanitized}");
             }
@@ -146,7 +154,7 @@ namespace SpaceTraders.API
                 string rawResponse = webRequest.downloadHandler?.text ?? string.Empty;
                 string errMessage = $"Error {code}: {webRequest.error}";
                 
-                LogResponse(endpoint, rawResponse, isError: true);
+                LogResponse(endpoint, rawResponse, isError: true, responseCode: code);
 
                 if (code == 401)
                 {
@@ -169,97 +177,159 @@ namespace SpaceTraders.API
             }
         }
 
+        private async Task<string> ExecuteWithRetry(Func<UnityWebRequest> requestFactory, string endpoint, int maxRetries = 3)
+        {
+            int attempts = 0;
+            int delayMs = 1000;
+
+            while (true)
+            {
+                attempts++;
+                UnityWebRequest webRequest = requestFactory();
+                try
+                {
+                    SetHeaders(webRequest);
+                    var operation = webRequest.SendWebRequest();
+
+                    while (!operation.isDone) await Task.Yield();
+
+                    ProcessResponse(webRequest, endpoint);
+                    string text = webRequest.downloadHandler.text;
+                    webRequest.Dispose();
+                    return text;
+                }
+                catch (SpaceTradersRateLimitException)
+                {
+                    webRequest.Dispose();
+                    if (attempts >= maxRetries)
+                    {
+                        throw;
+                    }
+
+                    int backoffMs = delayMs;
+                    if (!string.IsNullOrEmpty(RateLimitReset))
+                    {
+                        if (DateTime.TryParse(RateLimitReset, out DateTime resetTime))
+                        {
+                            double seconds = (resetTime - DateTime.UtcNow).TotalSeconds;
+                            if (seconds > 0 && seconds < 10)
+                            {
+                                backoffMs = Mathf.CeilToInt((float)seconds * 1000) + 100;
+                            }
+                        }
+                    }
+
+                    int jitter = UnityEngine.Random.Range(100, 300);
+                    backoffMs += jitter;
+
+                    Debug.LogWarning($"[SpaceTradersClient] Rate limit (429) hit on {endpoint}. Retrying attempt {attempts}/{maxRetries} after {backoffMs}ms...");
+                    await Task.Delay(backoffMs);
+                    delayMs *= 2;
+                }
+                catch (SpaceTradersApiException ex) when (ex.ResponseCode == 0 || ex.ResponseCode >= 500 || ex.ResponseCode == 408)
+                {
+                    webRequest.Dispose();
+                    if (attempts >= maxRetries)
+                    {
+                        throw;
+                    }
+
+                    int backoffMs = delayMs + UnityEngine.Random.Range(100, 300);
+                    Debug.LogWarning($"[SpaceTradersClient] Transient error (Code: {ex.ResponseCode}) on {endpoint}. Retrying attempt {attempts}/{maxRetries} after {backoffMs}ms...");
+                    await Task.Delay(backoffMs);
+                    delayMs *= 2;
+                }
+                catch (Exception)
+                {
+                    webRequest.Dispose();
+                    throw;
+                }
+            }
+        }
+
         public async Task<T> GetRequest<T>(string endpoint)
         {
             Debug.Log($"[SpaceTradersClient] GET {endpoint}");
-            using (UnityWebRequest webRequest = UnityWebRequest.Get($"{BaseUrl}{endpoint}"))
+            string responseText = await ExecuteWithRetry(() => UnityWebRequest.Get($"{BaseUrl}{endpoint}"), endpoint);
+            try
             {
-                SetHeaders(webRequest);
-                var operation = webRequest.SendWebRequest();
-
-                while (!operation.isDone) await Task.Yield();
-
-                ProcessResponse(webRequest, endpoint);
-
-                try
+                return JsonConvert.DeserializeObject<T>(responseText);
+            }
+            catch (Exception e)
+            {
+                if (Debug.isDebugBuild || Application.isEditor)
                 {
-                    return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(responseText)}");
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(webRequest.downloadHandler.text)}");
-                    throw;
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}");
                 }
+                throw;
             }
         }
 
         public async Task<string> GetRequestRaw(string endpoint)
         {
             Debug.Log($"[SpaceTradersClient] GET (Raw) {endpoint}");
-            using (UnityWebRequest webRequest = UnityWebRequest.Get($"{BaseUrl}{endpoint}"))
-            {
-                SetHeaders(webRequest);
-                var operation = webRequest.SendWebRequest();
-
-                while (!operation.isDone) await Task.Yield();
-
-                ProcessResponse(webRequest, endpoint);
-                return webRequest.downloadHandler.text;
-            }
+            return await ExecuteWithRetry(() => UnityWebRequest.Get($"{BaseUrl}{endpoint}"), endpoint);
         }
 
         public async Task<T> PostRequest<T, R>(string endpoint, R rawData)
         {
-            string jsonData = JsonUtility.ToJson(rawData);
+            string jsonData = JsonConvert.SerializeObject(rawData);
             Debug.Log($"[SpaceTradersClient] POST {endpoint}");
-            using (UnityWebRequest webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST"))
-            {
+            string responseText = await ExecuteWithRetry(() => {
+                var webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST");
                 byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
-                
-                SetHeaders(webRequest);
-                var operation = webRequest.SendWebRequest();
+                return webRequest;
+            }, endpoint);
 
-                while (!operation.isDone) await Task.Yield();
-
-                ProcessResponse(webRequest, endpoint);
-
-                try
+            try
+            {
+                return JsonConvert.DeserializeObject<T>(responseText);
+            }
+            catch (Exception e)
+            {
+                if (Debug.isDebugBuild || Application.isEditor)
                 {
-                    return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(responseText)}");
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(webRequest.downloadHandler.text)}");
-                    throw;
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}");
                 }
+                throw;
             }
         }
 
         public async Task<T> PostRequest<T>(string endpoint)
         {
             Debug.Log($"[SpaceTradersClient] POST {endpoint} (Empty)");
-            using (UnityWebRequest webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST"))
-            {
+            string responseText = await ExecuteWithRetry(() => {
+                var webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST");
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
-                SetHeaders(webRequest);
-                var operation = webRequest.SendWebRequest();
+                return webRequest;
+            }, endpoint);
 
-                while (!operation.isDone) await Task.Yield();
-
-                ProcessResponse(webRequest, endpoint);
-
-                try
+            try
+            {
+                return JsonConvert.DeserializeObject<T>(responseText);
+            }
+            catch (Exception e)
+            {
+                if (Debug.isDebugBuild || Application.isEditor)
                 {
-                    return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(responseText)}");
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}\n{SanitizeResponse(webRequest.downloadHandler.text)}");
-                    throw;
+                    Debug.LogError($"[SpaceTradersClient] Parse Error on {endpoint}: {e.Message}");
                 }
+                throw;
             }
         }
 
@@ -278,4 +348,3 @@ namespace SpaceTraders.API
         }
     }
 }
-
