@@ -13,7 +13,7 @@ namespace SpaceTraders.Core
         // In a production environment, you would use platform-specific 
         // secure storage (like Keychain on iOS or Keystore on Android).
 
-        private static readonly byte[] Key = Encoding.UTF8.GetBytes("s3cr3t_p4ss_sp4cetr4ders_12345"); // Must be 32 bytes for AES-256
+        private static readonly byte[] Key = Encoding.UTF8.GetBytes("s3cr3t_p4ss_sp4cetr4ders_1234567"); // Must be 32 bytes for AES-256
 
         public static string Encrypt(string plainText)
         {

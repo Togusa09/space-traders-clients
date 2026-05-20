@@ -2,6 +2,7 @@ using VContainer;
 using VContainer.Unity;
 using SpaceTraders.API;
 using SpaceTraders.Core;
+using SpaceTraders.UI;
 using UnityEngine;
 
 namespace SpaceTraders
@@ -17,6 +18,15 @@ namespace SpaceTraders
             builder.RegisterComponentInHierarchy<APIService>();
             builder.RegisterComponentInHierarchy<UniverseSyncManager>();
             builder.RegisterComponentInHierarchy<GameManager>();
+
+            // Register UI Controllers/Presenters to enable Injection
+            builder.RegisterComponentInHierarchy<MenuManager>();
+            builder.RegisterComponentInHierarchy<RegistrationUI>();
+            builder.RegisterComponentInHierarchy<SettingsUI>();
+            builder.RegisterComponentInHierarchy<DashboardController>();
+            builder.RegisterComponentInHierarchy<MapPresenter>();
+            builder.RegisterComponentInHierarchy<FleetPresenter>();
+            builder.RegisterComponentInHierarchy<ContractPresenter>();
         }
     }
 }

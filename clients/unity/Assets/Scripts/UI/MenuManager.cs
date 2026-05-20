@@ -3,6 +3,7 @@ using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -22,7 +23,19 @@ namespace SpaceTraders.UI
 
         private void OnEnable()
         {
-            var root = GetComponent<UIDocument>().rootVisualElement;
+            var uiDocument = GetComponent<UIDocument>();
+            if (uiDocument == null)
+            {
+                Log.Error("[MenuManager] UIDocument component missing on {Name}", gameObject.name);
+                return;
+            }
+
+            var root = uiDocument.rootVisualElement;
+            if (root == null)
+            {
+                Log.Error("[MenuManager] UI Root Visual Element is null.");
+                return;
+            }
 
             _playButton = root.Q<Button>("PlayButton");
             _settingsButton = root.Q<Button>("SettingsButton");
@@ -32,13 +45,20 @@ namespace SpaceTraders.UI
             if (_settingsButton != null) _settingsButton.clicked += OnSettingsClicked;
             if (_quitButton != null) _quitButton.clicked += OnQuitClicked;
 
-            _authManager.LoadTokens();
-            UpdateUI();
+            if (_authManager != null)
+            {
+                _authManager.LoadTokens();
+                UpdateUI();
+            }
+            else
+            {
+                Log.Warning("[MenuManager] AuthManager not injected. Dependency Injection might not be configured correctly in this scene.");
+            }
         }
 
         private void UpdateUI()
         {
-            if (_playButton != null)
+            if (_playButton != null && _authManager != null)
             {
                 _playButton.SetEnabled(_authManager.HasAgentToken);
             }
