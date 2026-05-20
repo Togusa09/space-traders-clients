@@ -722,6 +722,115 @@ namespace SpaceTraders.UI
         private VisualElement BindFaction(Faction f) { var element = factionTemplate.Instantiate(); element.Q<Label>("name-label").text = $"Name: {f.name}"; element.Q<Label>("details-label").text = $"Symbol: {f.symbol} | HQ: {f.headquarters}"; element.Q<Label>("description-label").text = f.description; return element; }
         private void AddRow(VisualElement root, string key, string value) { var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } }; row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } }); row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } }); root.Add(row); }
 
+        private string GetWaypointDescription(string type) => type switch {
+            "PLANET" => "Large celestial body orbiting a star.", "MOON" => "Natural satellite orbiting a planet.",
+            "ORBITAL_STATION" => "Man-made structure in orbit.", "JUMP_GATE" => "Fast-travel gateway to other systems.",
+            "ASTEROID_FIELD" => "Region rich in minerals.", "GAS_GIANT" => "Massive planet composed of gases.",
+            _ => "Unknown waypoint type."
+        };
+
+        private async Task FetchWaypointDetails(SystemWaypoint wp)
+        {
+            string systemSymbol = _currentSystem.symbol;
+            string wpSymbol = wp.symbol;
+            try
+            {
+                if (wp.type == "ORBITAL_STATION" || wp.type == "PLANET")
+                {
+                    try {
+                        var res = await APIService.Instance.GetMarket(systemSymbol, wpSymbol);
+                        DisplayMarket(res.data);
+                    } catch {
+                        try {
+                            var res = await APIService.Instance.GetShipyard(systemSymbol, wpSymbol);
+                            DisplayShipyard(res.data);
+                        } catch {
+                            try {
+                                var res = await APIService.Instance.GetConstruction(systemSymbol, wpSymbol);
+                                DisplayConstruction(res.data);
+                            } catch {
+                                _extraInfoTitle.text = "No specialized info";
+                            }
+                        }
+                    }
+                }
+                else if (wp.type == "JUMP_GATE")
+                {
+                    var res = await APIService.Instance.GetJumpGate(systemSymbol, wpSymbol);
+                    _extraInfoTitle.text = "Jump Gate Connections";
+                    foreach(var conn in res.data.connections) _extraContentContainer.Add(new Label($"• {conn}") { style = { fontSize = 11 } });
+                }
+                else { _extraInfoTitle.text = "Basic Waypoint"; }
+            }
+            catch (Exception e) { _extraInfoTitle.text = "Error loading info"; Debug.LogError(e.Message); }
+        }
+
+        private void DisplayMarket(Market m)
+        {
+            _extraInfoTitle.text = "Marketplace";
+            if (m.tradeGoods != null && m.tradeGoods.Length > 0)
+            {
+                foreach (var g in m.tradeGoods)
+                {
+                    var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, marginBottom = 2 } };
+                    row.Add(new Label(g.symbol) { style = { fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold, width = 80 } });
+                    row.Add(new Label($"{g.supply}") { style = { fontSize = 10, color = GetSupplyColor(g.supply), width = 60 } });
+                    row.Add(new Label($"B: {g.purchasePrice} S: {g.sellPrice}") { style = { fontSize = 10, color = Color.gray } });
+                    _extraContentContainer.Add(row);
+                }
+            }
+            else
+            {
+                if (m.imports.Length > 0) _extraContentContainer.Add(new Label($"Imports: {string.Join(", ", m.imports.Select(i => i.symbol))}") { style = { fontSize = 10, whiteSpace = WhiteSpace.Normal } });
+                if (m.exports.Length > 0) _extraContentContainer.Add(new Label($"Exports: {string.Join(", ", m.exports.Select(e => e.symbol))}") { style = { fontSize = 10, whiteSpace = WhiteSpace.Normal } });
+            }
+        }
+
+        private Color GetSupplyColor(string supply) => supply switch {
+            "ABUNDANT" => Color.green, "HIGH" => new Color(0.5f, 1f, 0.5f), "MODERATE" => Color.white,
+            "LIMITED" => Color.yellow, "SCARCE" => new Color(1f, 0.5f, 0f), _ => Color.gray
+        };
+
+        private void DisplayShipyard(Shipyard s)
+        {
+            _extraInfoTitle.text = "Shipyard";
+            if (s.ships != null && s.ships.Length > 0)
+            {
+                foreach (var ship in s.ships)
+                {
+                    var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, marginBottom = 2 } };
+                    row.Add(new Label(ship.name) { style = { fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold, flexGrow = 1 } });
+                    row.Add(new Label($"{ship.purchasePrice:N0} C") { style = { fontSize = 11, color = Color.yellow } });
+                    _extraContentContainer.Add(row);
+                }
+            }
+            else if (s.shipTypes != null)
+            {
+                _extraContentContainer.Add(new Label("Available Models:") { style = { fontSize = 10, color = Color.gray } });
+                foreach(var type in s.shipTypes) _extraContentContainer.Add(new Label($"• {type}") { style = { fontSize = 11 } });
+            }
+        }
+
+        private void DisplayConstruction(Construction c)
+        {
+            _extraInfoTitle.text = "Construction Progress";
+            if (c.isComplete) { _extraContentContainer.Add(new Label("Construction Complete") { style = { color = Color.green } }); return; }
+            foreach (var m in c.materials)
+            {
+                var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, marginBottom = 2 } };
+                row.Add(new Label(m.tradeSymbol) { style = { fontSize = 11, flexGrow = 1 } });
+                row.Add(new Label($"{m.fulfilled}/{m.required}") { style = { fontSize = 11, color = m.fulfilled >= m.required ? Color.green : Color.white } });
+                _extraContentContainer.Add(row);
+            }
+        }
+
+        public void Pan(Vector2 delta) { _mapOffset += delta; RefreshMapUI(); }
+        public void Zoom(float delta, Vector2 mousePos) {
+            float oldZoom = _mapZoom; _mapZoom = Mathf.Clamp(_mapZoom * (1f + delta), 0.01f, 10000f);
+            Vector2 worldPos = (mousePos - _mapOffset) / oldZoom; _mapOffset = mousePos - (worldPos * _mapZoom);
+            RefreshMapUI();
+        }
+
         private class MapManipulator : Manipulator {
             private DashboardController _controller; private bool _active; private Vector2 _lastMousePos;
             public MapManipulator(DashboardController controller) { _controller = controller; }
