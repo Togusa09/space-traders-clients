@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using SpaceTraders.Core;
 using Newtonsoft.Json;
+using VContainer;
 
 namespace SpaceTraders.API
 {
@@ -38,40 +39,16 @@ namespace SpaceTraders.API
         private const string BaseUrl = "https://api.spacetraders.io/v2";
         private string _token;
 
-        private static SpaceTradersClient _instance;
-        public static SpaceTradersClient Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<SpaceTradersClient>();
+        private AuthManager _authManager;
 
-                    if (_instance == null)
-                    {
-                        GameObject go = new GameObject("SpaceTradersClient");
-                        _instance = go.AddComponent<SpaceTradersClient>();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return _instance;
-            }
+        [Inject]
+        public void Construct(AuthManager authManager)
+        {
+            _authManager = authManager;
         }
 
         public static int RateLimitRemaining { get; private set; } = -1;
         public static string RateLimitReset { get; private set; } = string.Empty;
-
-        private void Awake()
-        {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
 
         public void SetToken(string token)
         {
@@ -158,7 +135,7 @@ namespace SpaceTraders.API
 
                 if (code == 401)
                 {
-                    AuthManager.Instance.HandleTokenUnauthorized();
+                    _authManager.HandleTokenUnauthorized();
                     throw new SpaceTradersUnauthorizedException(errMessage, rawResponse);
                 }
                 else if (code == 429)
@@ -337,7 +314,7 @@ namespace SpaceTraders.API
         {
             if (string.IsNullOrEmpty(_token))
             {
-                _token = AuthManager.Instance.AgentToken;
+                _token = _authManager.AgentToken;
             }
 
             if (!string.IsNullOrEmpty(_token))

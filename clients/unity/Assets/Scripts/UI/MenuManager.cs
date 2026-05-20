@@ -2,65 +2,59 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
+using VContainer;
 
 namespace SpaceTraders.UI
 {
     public class MenuManager : MonoBehaviour
     {
-        [SerializeField] private UIDocument uiDocument;
-        // Removed AuthManager field as we use the Singleton
-
-        [SerializeField] private string playSceneName = "GameplayPlaceholder";
-        [SerializeField] private string settingsSceneName = "Settings";
-
         private Button _playButton;
         private Button _settingsButton;
-        private Button _exitButton;
+        private Button _quitButton;
+
+        private AuthManager _authManager;
+
+        [Inject]
+        public void Construct(AuthManager authManager)
+        {
+            _authManager = authManager;
+        }
 
         private void OnEnable()
         {
-            var root = uiDocument.rootVisualElement;
+            var root = GetComponent<UIDocument>().rootVisualElement;
 
-            _playButton = root.Q<Button>("play-button");
-            _settingsButton = root.Q<Button>("settings-button");
-            _exitButton = root.Q<Button>("exit-button");
+            _playButton = root.Q<Button>("PlayButton");
+            _settingsButton = root.Q<Button>("SettingsButton");
+            _quitButton = root.Q<Button>("QuitButton");
 
-            _playButton.clicked += OnPlayClicked;
-            _settingsButton.clicked += OnSettingsClicked;
-            _exitButton.clicked += OnExitClicked;
+            if (_playButton != null) _playButton.clicked += OnPlayClicked;
+            if (_settingsButton != null) _settingsButton.clicked += OnSettingsClicked;
+            if (_quitButton != null) _quitButton.clicked += OnQuitClicked;
 
-            // Ensure AuthManager is initialized
-            AuthManager.Instance.LoadTokens();
-            UpdateButtonStates();
+            _authManager.LoadTokens();
+            UpdateUI();
         }
 
-        private void OnDisable()
-        {
-            if (_playButton != null) _playButton.clicked -= OnPlayClicked;
-            if (_settingsButton != null) _settingsButton.clicked -= OnSettingsClicked;
-            if (_exitButton != null) _exitButton.clicked -= OnExitClicked;
-        }
-
-        private void UpdateButtonStates()
+        private void UpdateUI()
         {
             if (_playButton != null)
             {
-                // Play is disabled if agent token is missing
-                _playButton.SetEnabled(AuthManager.Instance.HasAgentToken);
+                _playButton.SetEnabled(_authManager.HasAgentToken);
             }
         }
 
         private void OnPlayClicked()
         {
-            SceneManager.LoadScene(playSceneName);
+            SceneManager.LoadScene("GameplayPlaceholder");
         }
 
         private void OnSettingsClicked()
         {
-            SceneManager.LoadScene(settingsSceneName);
+            SceneManager.LoadScene("Settings");
         }
 
-        private void OnExitClicked()
+        private void OnQuitClicked()
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

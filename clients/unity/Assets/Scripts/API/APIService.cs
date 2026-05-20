@@ -5,70 +5,49 @@ using SpaceTraders.API.Models;
 using SpaceTraders.Core;
 using UnityEngine;
 using Newtonsoft.Json;
+using VContainer;
 
 namespace SpaceTraders.API
 {
     public class APIService : MonoBehaviour
     {
-        private static APIService _instance;
-        public static APIService Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<APIService>();
-
-                    if (_instance == null)
-                    {
-                        GameObject go = new GameObject("APIService");
-                        _instance = go.AddComponent<APIService>();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return _instance;
-            }
-        }
-
         private const long PersistentCacheMaxAge = 24 * 60 * 60; // 24 hours
 
-        private void Awake()
-        {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
+        private SpaceTradersClient _client;
+        private DatabaseManager _dbManager;
 
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
+        [Inject]
+        public void Construct(SpaceTradersClient client, DatabaseManager dbManager)
+        {
+            _client = client;
+            _dbManager = dbManager;
         }
 
         public async Task<RegistrationResponse> Register(string symbol, string faction)
         {
             var data = new RegistrationData { symbol = symbol, faction = faction };
-            return await SpaceTradersClient.Instance.PostRequest<RegistrationResponse, RegistrationData>("/register", data);
+            return await _client.PostRequest<RegistrationResponse, RegistrationData>("/register", data);
         }
 
         public async Task<AgentResponse> GetMyAgent()
         {
-            return await SpaceTradersClient.Instance.GetRequest<AgentResponse>("/my/agent");
+            return await _client.GetRequest<AgentResponse>("/my/agent");
         }
 
         public async Task<ContractsResponse> GetContracts()
         {
-            return await SpaceTradersClient.Instance.GetRequest<ContractsResponse>("/my/contracts");
+            return await _client.GetRequest<ContractsResponse>("/my/contracts");
         }
 
         public async Task<ShipsResponse> GetShips()
         {
-            return await SpaceTradersClient.Instance.GetRequest<ShipsResponse>("/my/ships");
+            return await _client.GetRequest<ShipsResponse>("/my/ships");
         }
 
         public async Task<SystemsResponse> GetSystems(int page = 1, int limit = 10)
         {
             string cacheKey = $"systems_p{page}_l{limit}";
-            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -85,17 +64,17 @@ namespace SpaceTraders.API
 
             string endpoint = $"/systems?page={page}&limit={limit}";
             Debug.Log($"[APIService] Fetching systems page {page} from network...");
-            string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
+            string json = await _client.GetRequestRaw(endpoint);
             
             Debug.Log($"[APIService] Received systems page {page} from network. Caching...");
-            DatabaseManager.Instance.SetCache(cacheKey, json);
+            _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<SystemsResponse>(json);
         }
 
         public async Task<SystemResponse> GetSystem(string systemSymbol)
         {
             string cacheKey = $"system_{systemSymbol}";
-            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -112,17 +91,17 @@ namespace SpaceTraders.API
 
             string endpoint = $"/systems/{systemSymbol}";
             Debug.Log($"[APIService] Fetching system {systemSymbol} details from network...");
-            string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
+            string json = await _client.GetRequestRaw(endpoint);
             
             Debug.Log($"[APIService] Received system {systemSymbol} from network. Caching...");
-            DatabaseManager.Instance.SetCache(cacheKey, json);
+            _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<SystemResponse>(json);
         }
 
         public async Task<SystemWaypointsResponse> GetSystemWaypoints(string systemSymbol)
         {
             string cacheKey = $"system_waypoints_{systemSymbol}";
-            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -148,7 +127,7 @@ namespace SpaceTraders.API
                 {
                     string endpoint = $"/systems/{systemSymbol}/waypoints?page={page}&limit={limit}";
                     Debug.Log($"[APIService] Fetching waypoints for system {systemSymbol} page {page} from network...");
-                    string json = await SpaceTradersClient.Instance.GetRequestRaw(endpoint);
+                    string json = await _client.GetRequestRaw(endpoint);
                     var pageRes = JsonConvert.DeserializeObject<SystemWaypointsResponse>(json);
                     
                     if (pageRes != null && pageRes.data != null)
@@ -174,7 +153,7 @@ namespace SpaceTraders.API
                 {
                     firstPage.data = allWaypoints.ToArray();
                     string fullJson = JsonConvert.SerializeObject(firstPage);
-                    DatabaseManager.Instance.SetCache(cacheKey, fullJson);
+                    _dbManager.SetCache(cacheKey, fullJson);
                     return firstPage;
                 }
             }
@@ -189,22 +168,22 @@ namespace SpaceTraders.API
 
         public async Task<MarketResponse> GetMarket(string systemSymbol, string waypointSymbol)
         {
-            return await SpaceTradersClient.Instance.GetRequest<MarketResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/market");
+            return await _client.GetRequest<MarketResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/market");
         }
 
         public async Task<ShipyardResponse> GetShipyard(string systemSymbol, string waypointSymbol)
         {
-            return await SpaceTradersClient.Instance.GetRequest<ShipyardResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/shipyard");
+            return await _client.GetRequest<ShipyardResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/shipyard");
         }
 
         public async Task<ConstructionResponse> GetConstruction(string systemSymbol, string waypointSymbol)
         {
-            return await SpaceTradersClient.Instance.GetRequest<ConstructionResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/construction");
+            return await _client.GetRequest<ConstructionResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/construction");
         }
 
         public async Task<JumpGateResponse> GetJumpGate(string systemSymbol, string waypointSymbol)
         {
-            return await SpaceTradersClient.Instance.GetRequest<JumpGateResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/jump-gate");
+            return await _client.GetRequest<JumpGateResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/jump-gate");
         }
 
         [Serializable]
@@ -223,7 +202,7 @@ namespace SpaceTraders.API
         public async Task<FactionsResponse> GetFactions()
         {
             string cacheKey = "factions_list";
-            string cachedJson = DatabaseManager.Instance.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -239,71 +218,71 @@ namespace SpaceTraders.API
             }
 
             Debug.Log("[APIService] Fetching factions from network...");
-            string json = await SpaceTradersClient.Instance.GetRequestRaw("/factions");
+            string json = await _client.GetRequestRaw("/factions");
             
             Debug.Log("[APIService] Received factions from network. Caching...");
-            DatabaseManager.Instance.SetCache(cacheKey, json);
+            _dbManager.SetCache(cacheKey, json);
             return JsonConvert.DeserializeObject<FactionsResponse>(json);
         }
 
         public async Task<AcceptContractResponse> AcceptContract(string contractId)
         {
-            return await SpaceTradersClient.Instance.PostRequest<AcceptContractResponse>($"/my/contracts/{contractId}/accept");
+            return await _client.PostRequest<AcceptContractResponse>($"/my/contracts/{contractId}/accept");
         }
 
         public async Task<PurchaseShipResponse> PurchaseShip(string shipType, string waypointSymbol)
         {
             var req = new PurchaseShipRequest { shipType = shipType, waypointSymbol = waypointSymbol };
-            return await SpaceTradersClient.Instance.PostRequest<PurchaseShipResponse, PurchaseShipRequest>("/my/ships", req);
+            return await _client.PostRequest<PurchaseShipResponse, PurchaseShipRequest>("/my/ships", req);
         }
 
         public async Task<ShipNavResponse> OrbitShip(string shipSymbol)
         {
-            return await SpaceTradersClient.Instance.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/orbit");
+            return await _client.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/orbit");
         }
 
         public async Task<ShipNavResponse> DockShip(string shipSymbol)
         {
-            return await SpaceTradersClient.Instance.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/dock");
+            return await _client.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/dock");
         }
 
         public async Task<NavigateResponse> NavigateShip(string shipSymbol, string waypointSymbol)
         {
             var req = new NavigateRequest { waypointSymbol = waypointSymbol };
-            return await SpaceTradersClient.Instance.PostRequest<NavigateResponse, NavigateRequest>($"/my/ships/{shipSymbol}/navigate", req);
+            return await _client.PostRequest<NavigateResponse, NavigateRequest>($"/my/ships/{shipSymbol}/navigate", req);
         }
 
         public async Task<ExtractionResponse> ExtractResources(string shipSymbol)
         {
-            return await SpaceTradersClient.Instance.PostRequest<ExtractionResponse>($"/my/ships/{shipSymbol}/extract");
+            return await _client.PostRequest<ExtractionResponse>($"/my/ships/{shipSymbol}/extract");
         }
 
         public async Task<SellCargoResponse> SellCargo(string shipSymbol, string tradeSymbol, int units)
         {
             var req = new SellCargoRequest { symbol = tradeSymbol, units = units };
-            return await SpaceTradersClient.Instance.PostRequest<SellCargoResponse, SellCargoRequest>($"/my/ships/{shipSymbol}/sell", req);
+            return await _client.PostRequest<SellCargoResponse, SellCargoRequest>($"/my/ships/{shipSymbol}/sell", req);
         }
 
         public async Task<RefuelResponse> RefuelShip(string shipSymbol, int units)
         {
             var req = new RefuelRequest { units = units };
-            return await SpaceTradersClient.Instance.PostRequest<RefuelResponse, RefuelRequest>($"/my/ships/{shipSymbol}/refuel", req);
+            return await _client.PostRequest<RefuelResponse, RefuelRequest>($"/my/ships/{shipSymbol}/refuel", req);
         }
 
         public async Task<RefuelResponse> RefuelShip(string shipSymbol)
         {
-            return await SpaceTradersClient.Instance.PostRequest<RefuelResponse>($"/my/ships/{shipSymbol}/refuel");
+            return await _client.PostRequest<RefuelResponse>($"/my/ships/{shipSymbol}/refuel");
         }
 
         public async Task<DeliverContractResponse> DeliverContractCargo(string contractId, string shipSymbol, string tradeSymbol, int units)
         {
             var req = new DeliverContractRequest { shipSymbol = shipSymbol, tradeSymbol = tradeSymbol, units = units };
-            return await SpaceTradersClient.Instance.PostRequest<DeliverContractResponse, DeliverContractRequest>($"/my/contracts/{contractId}/deliver", req);
+            return await _client.PostRequest<DeliverContractResponse, DeliverContractRequest>($"/my/contracts/{contractId}/deliver", req);
         }
 
         public async Task<FulfillContractResponse> FulfillContract(string contractId)
         {
-            return await SpaceTradersClient.Instance.PostRequest<FulfillContractResponse>($"/my/contracts/{contractId}/fulfill");
+            return await _client.PostRequest<FulfillContractResponse>($"/my/contracts/{contractId}/fulfill");
         }
     }
 }

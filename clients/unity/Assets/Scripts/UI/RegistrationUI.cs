@@ -1,76 +1,61 @@
 using UnityEngine;
 using UnityEngine.UIElements;
-using UnityEngine.SceneManagement;
-using SpaceTraders.Core;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
-using System;
+using VContainer;
 
 namespace SpaceTraders.UI
 {
     public class RegistrationUI : MonoBehaviour
     {
-        [SerializeField] private UIDocument uiDocument;
-        [SerializeField] private string mainMenuSceneName = "MainMenu";
-
         private TextField _symbolInput;
-        private DropdownField _factionDropdown;
+        private TextField _factionInput;
         private Button _registerButton;
-        private Button _backButton;
         private Label _statusLabel;
+
+        private APIService _apiService;
+        private Core.GameManager _gameManager;
+
+        [Inject]
+        public void Construct(APIService apiService, Core.GameManager gameManager)
+        {
+            _apiService = apiService;
+            _gameManager = gameManager;
+        }
 
         private void OnEnable()
         {
-            var root = uiDocument.rootVisualElement;
-
-            _symbolInput = root.Q<TextField>("symbol-input");
-            _factionDropdown = root.Q<DropdownField>("faction-dropdown");
-            _registerButton = root.Q<Button>("register-button");
-            _backButton = root.Q<Button>("back-button");
-            _statusLabel = root.Q<Label>("status-label");
-
-            // Populate factions
-            _factionDropdown.choices = new System.Collections.Generic.List<string> { "COSMIC", "VOID", "GALACTIC", "QUANTUM", "DOMINION" };
-            _factionDropdown.value = "COSMIC";
+            var root = GetComponent<UIDocument>().rootVisualElement;
+            _symbolInput = root.Q<TextField>("SymbolInput");
+            _factionInput = root.Q<TextField>("FactionInput");
+            _registerButton = root.Q<Button>("RegisterButton");
+            _statusLabel = root.Q<Label>("StatusLabel");
 
             _registerButton.clicked += OnRegisterClicked;
-            _backButton.clicked += OnBackClicked;
-        }
-
-        private void OnDisable()
-        {
-            if (_registerButton != null) _registerButton.clicked -= OnRegisterClicked;
-            if (_backButton != null) _backButton.clicked -= OnBackClicked;
-        }
-
-        private void OnBackClicked()
-        {
-            SceneManager.LoadScene(mainMenuSceneName);
         }
 
         private async void OnRegisterClicked()
         {
             string symbol = _symbolInput.value;
-            string faction = _factionDropdown.value;
+            string faction = _factionInput.value;
 
-            if (string.IsNullOrEmpty(symbol))
+            if (string.IsNullOrEmpty(symbol) || string.IsNullOrEmpty(faction))
             {
-                _statusLabel.text = "Please enter a symbol.";
+                _statusLabel.text = "Symbol and Faction are required.";
                 return;
             }
 
-            _statusLabel.text = "Registering...";
             _registerButton.SetEnabled(false);
+            _statusLabel.text = "Registering...";
 
             try
             {
-                var response = await APIService.Instance.Register(symbol, faction);
+                var response = await _apiService.Register(symbol, faction);
                 _statusLabel.text = "Registration successful!";
-                GameManager.Instance.OnRegistrationSuccess(response.data.token);
+                _gameManager.OnRegistrationSuccess(response.data.token);
             }
-            catch (Exception e)
+            catch (System.Exception ex)
             {
-                _statusLabel.text = $"Registration failed: {e.Message}";
+                _statusLabel.text = $"Error: {ex.Message}";
                 _registerButton.SetEnabled(true);
             }
         }

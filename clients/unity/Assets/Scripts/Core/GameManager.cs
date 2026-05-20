@@ -3,35 +3,23 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using SpaceTraders.API;
 using SpaceTraders.UI;
+using VContainer;
 
 namespace SpaceTraders.Core
 {
     public class GameManager : MonoBehaviour
     {
-        private static GameManager _instance;
-        public static GameManager Instance => _instance;
+        private AuthManager _authManager;
 
-        private void Awake()
+        [Inject]
+        public void Construct(AuthManager authManager)
         {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
-            
-            // Initialize Core Managers
-            _ = DatabaseManager.Instance;
-            _ = AuthManager.Instance;
-            _ = SpaceTradersClient.Instance;
-            _ = UniverseSyncManager.Instance;
+            _authManager = authManager;
         }
 
         public void OnRegistrationSuccess(string token)
         {
-            AuthManager.Instance.SaveAgentToken(token);
+            _authManager.SaveAgentToken(token);
             SceneManager.LoadScene("MainMenu");
         }
     }

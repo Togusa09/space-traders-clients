@@ -6,30 +6,12 @@ using System.Linq;
 using UnityEngine;
 using SpaceTraders.API;
 using SpaceTraders.API.Models;
+using VContainer;
 
 namespace SpaceTraders.Core
 {
     public class UniverseSyncManager : MonoBehaviour
     {
-        private static UniverseSyncManager _instance;
-        public static UniverseSyncManager Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<UniverseSyncManager>();
-                    if (_instance == null)
-                    {
-                        GameObject go = new GameObject("UniverseSyncManager");
-                        _instance = go.AddComponent<UniverseSyncManager>();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return _instance;
-            }
-        }
-
         private bool _isSyncing = false;
         public bool IsSyncing => _isSyncing;
         public float Progress { get; private set; }
@@ -40,9 +22,19 @@ namespace SpaceTraders.Core
 
         private CancellationTokenSource _cts;
 
+        private APIService _apiService;
+        private DatabaseManager _dbManager;
+
+        [Inject]
+        public void Construct(APIService apiService, DatabaseManager dbManager)
+        {
+            _apiService = apiService;
+            _dbManager = dbManager;
+        }
+
         private void Start()
         {
-            int existingCount = DatabaseManager.Instance.GetIndexedSystemCount();
+            int existingCount = _dbManager.GetIndexedSystemCount();
             Debug.Log($"[UniverseSyncManager] Initial check. Indexed systems: {existingCount}");
             
             if (existingCount == 0)
@@ -84,7 +76,7 @@ namespace SpaceTraders.Core
                     if (token.IsCancellationRequested) break;
 
                     Debug.Log($"[UniverseSyncManager] Requesting page {CurrentPage}...");
-                    SystemsResponse response = await APIService.Instance.GetSystems(CurrentPage, limit);
+                    SystemsResponse response = await _apiService.GetSystems(CurrentPage, limit);
 
                     if (response != null && response.data != null)
                     {
@@ -102,9 +94,9 @@ namespace SpaceTraders.Core
                             WaypointCount = s.waypoints != null ? s.waypoints.Length : 0
                         }).ToList();
 
-                        DatabaseManager.Instance.StoreSystems(indexed);
+                        _dbManager.StoreSystems(indexed);
                         
-                        int newCount = DatabaseManager.Instance.GetIndexedSystemCount();
+                        int newCount = _dbManager.GetIndexedSystemCount();
                         Debug.Log($"[UniverseSyncManager] Page {CurrentPage} stored. Total indexed: {newCount}");
 
                         Progress = (float)CurrentPage / TotalPages;

@@ -3,30 +3,12 @@ using System.IO;
 using System.Collections.Generic;
 using SQLite;
 using UnityEngine;
+using VContainer;
 
 namespace SpaceTraders.Core
 {
     public class DatabaseManager : MonoBehaviour
     {
-        private static DatabaseManager _instance;
-        public static DatabaseManager Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<DatabaseManager>();
-                    if (_instance == null)
-                    {
-                        GameObject go = new GameObject("DatabaseManager");
-                        _instance = go.AddComponent<DatabaseManager>();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return _instance;
-            }
-        }
-
         private string _dbPath;
         private SQLiteConnection _db;
 
@@ -48,14 +30,6 @@ namespace SpaceTraders.Core
 
         private void Awake()
         {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
-
             if (string.IsNullOrEmpty(_dbPath))
             {
                 _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");

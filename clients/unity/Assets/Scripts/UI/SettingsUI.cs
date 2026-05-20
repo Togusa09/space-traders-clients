@@ -3,163 +3,121 @@ using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
-using System;
+using VContainer;
 
 namespace SpaceTraders.UI
 {
     public class SettingsUI : MonoBehaviour
     {
-        [SerializeField] private UIDocument uiDocument;
-        [SerializeField] private string mainMenuSceneName = "MainMenu";
-
         private TextField _agentTokenInput;
-        private Button _saveButton, _backButton, _testAgentButton;
-        private Label _statusLabel;
+        private Button _saveButton;
+        private Button _backButton;
+        private Button _startSyncButton;
+        private Button _stopSyncButton;
+        private Button _clearCacheButton;
+        private Label _syncStatusLabel;
+        private Label _dbStatusLabel;
 
-        // Debug Elements
-        private Button _startSyncBtn, _stopSyncBtn, _clearCacheBtn;
-        private Label _syncStatus, _dbCount, _expectedCount, _syncProgress;
+        private AuthManager _authManager;
+        private SpaceTradersClient _client;
+        private APIService _apiService;
+        private DatabaseManager _dbManager;
+        private UniverseSyncManager _syncManager;
 
-        // Popup elements
-        private VisualElement _popupInstance, _popupOverlay, _popupDataContainer;
-        private Label _popupTitle;
-        private Button _popupCloseButton;
+        [Inject]
+        public void Construct(
+            AuthManager authManager, 
+            SpaceTradersClient client, 
+            APIService apiService, 
+            DatabaseManager dbManager, 
+            UniverseSyncManager syncManager)
+        {
+            _authManager = authManager;
+            _client = client;
+            _apiService = apiService;
+            _dbManager = dbManager;
+            _syncManager = syncManager;
+        }
 
         private void OnEnable()
         {
-            var root = uiDocument.rootVisualElement;
+            var root = GetComponent<UIDocument>().rootVisualElement;
 
-            _agentTokenInput = root.Q<TextField>("agent-token-input");
-            _saveButton = root.Q<Button>("save-button");
-            _backButton = root.Q<Button>("back-button");
-            _testAgentButton = root.Q<Button>("test-agent-button");
-            _statusLabel = root.Q<Label>("status-label");
-
-            // Debug Bindings
-            _startSyncBtn = root.Q<Button>("start-sync-btn");
-            _stopSyncBtn = root.Q<Button>("stop-sync-btn");
-            _clearCacheBtn = root.Q<Button>("clear-cache-button");
-            
-            _syncStatus = root.Q<Label>("sync-status");
-            _dbCount = root.Q<Label>("db-count");
-            _expectedCount = root.Q<Label>("expected-count");
-            _syncProgress = root.Q<Label>("sync-progress");
-
-            // Popup
-            _popupInstance = root.Q<VisualElement>("popup-instance");
-            _popupOverlay = root.Q<VisualElement>("popup-overlay");
-            _popupDataContainer = root.Q<VisualElement>("popup-data-container");
-            _popupTitle = root.Q<Label>("popup-title");
-            _popupCloseButton = root.Q<Button>("popup-close-button");
-
-            _agentTokenInput.value = AuthManager.Instance.AgentToken;
+            _agentTokenInput = root.Q<TextField>("AgentTokenInput");
+            _saveButton = root.Q<Button>("SaveButton");
+            _backButton = root.Q<Button>("BackButton");
+            _startSyncButton = root.Q<Button>("StartSyncButton");
+            _stopSyncButton = root.Q<Button>("StopSyncButton");
+            _clearCacheButton = root.Q<Button>("ClearCacheButton");
+            _syncStatusLabel = root.Q<Label>("SyncStatusLabel");
+            _dbStatusLabel = root.Q<Label>("DatabaseStatusLabel");
 
             _saveButton.clicked += OnSaveClicked;
-            _backButton.clicked += OnBackClicked;
-            _testAgentButton.clicked += OnTestAgentClicked;
+            _backButton.clicked += () => SceneManager.LoadScene("MainMenu");
+            _startSyncButton.clicked += OnStartSyncClicked;
+            _stopSyncButton.clicked += OnStopSyncClicked;
+            _clearCacheButton.clicked += OnClearCacheClicked;
 
-            _startSyncBtn.clicked += OnStartSyncClicked;
-            _stopSyncBtn.clicked += OnStopSyncClicked;
-            _clearCacheBtn.clicked += OnClearCacheClicked;
-
-            _popupCloseButton.clicked += OnPopupCloseClicked;
-        }
-
-        private void OnDisable()
-        {
-            if (_saveButton != null) _saveButton.clicked -= OnSaveClicked;
-            if (_backButton != null) _backButton.clicked -= OnBackClicked;
-            if (_testAgentButton != null) _testAgentButton.clicked -= OnTestAgentClicked;
-            if (_startSyncBtn != null) _startSyncBtn.clicked -= OnStartSyncClicked;
-            if (_stopSyncBtn != null) _stopSyncBtn.clicked -= OnStopSyncClicked;
-            if (_clearCacheBtn != null) _clearCacheBtn.clicked -= OnClearCacheClicked;
-            if (_popupCloseButton != null) _popupCloseButton.clicked -= OnPopupCloseClicked;
-        }
-
-        private void OnStartSyncClicked() => UniverseSyncManager.Instance.StartSync();
-        private void OnStopSyncClicked() => UniverseSyncManager.Instance.StopSync();
-        private void OnClearCacheClicked()
-        {
-            DatabaseManager.Instance.ClearCache();
-            _statusLabel.text = "Database cleared.";
-        }
-        private void OnPopupCloseClicked()
-        {
-            _popupOverlay.style.display = DisplayStyle.None;
-            _popupInstance.style.display = DisplayStyle.None;
+            _agentTokenInput.value = _authManager.AgentToken;
         }
 
         private void Update()
         {
-            // Update stats in real-time
-            var sync = UniverseSyncManager.Instance;
-            var db = DatabaseManager.Instance;
-
-            _syncStatus.text = sync.IsSyncing ? "Syncing..." : "Idle";
-            _syncStatus.style.color = sync.IsSyncing ? Color.green : Color.white;
-            
-            _dbCount.text = db.GetIndexedSystemCount().ToString("N0");
-            _expectedCount.text = sync.TotalSystemsExpected > 0 ? sync.TotalSystemsExpected.ToString("N0") : "?";
-            _syncProgress.text = $"{(sync.Progress * 100):F1}% (Page {sync.CurrentPage}/{sync.TotalPages})";
-
-            _startSyncBtn.SetEnabled(!sync.IsSyncing);
-            _stopSyncBtn.SetEnabled(sync.IsSyncing);
+            UpdateStatus();
         }
 
-        private void OnSaveClicked()
+        private void UpdateStatus()
         {
-            AuthManager.Instance.SaveAgentToken(_agentTokenInput.value);
-            _statusLabel.text = "Token saved successfully!";
+            if (_syncStatusLabel == null) return;
+
+            var sync = _syncManager;
+            var db = _dbManager;
+
+            if (sync.IsSyncing)
+            {
+                _syncStatusLabel.text = $"Syncing: {sync.Progress:P0} (Page {sync.CurrentPage}/{sync.TotalPages})";
+                _startSyncButton.SetEnabled(false);
+                _stopSyncButton.SetEnabled(true);
+            }
+            else
+            {
+                _syncStatusLabel.text = "Sync Idle";
+                _startSyncButton.SetEnabled(true);
+                _stopSyncButton.SetEnabled(false);
+            }
+
+            _dbStatusLabel.text = $"Indexed Systems: {db.GetIndexedSystemCount()}";
         }
 
-        private void OnBackClicked() => SceneManager.LoadScene(mainMenuSceneName);
-
-        private async void OnTestAgentClicked()
+        private void OnStartSyncClicked() => _syncManager.StartSync();
+        private void OnStopSyncClicked() => _syncManager.StopSync();
+        private void OnClearCacheClicked()
         {
-            _statusLabel.text = "Testing Agent Token...";
+            _dbManager.ClearCache();
+            UpdateStatus();
+        }
+
+        private async void OnSaveClicked()
+        {
+            _saveButton.SetEnabled(false);
             try
             {
-                SpaceTradersClient.Instance.SetToken(_agentTokenInput.value);
-                var response = await APIService.Instance.GetMyAgent();
-                ShowAgentData(response.data);
+                _authManager.SaveAgentToken(_agentTokenInput.value);
+                
+                // Validate token by fetching agent data
+                _client.SetToken(_agentTokenInput.value);
+                var response = await _apiService.GetMyAgent();
+                
+                Debug.Log($"[SettingsUI] Token validated for agent: {response.data.symbol}");
             }
-            catch (Exception e)
+            catch (System.Exception ex)
             {
-                ShowError("Agent Test Failed", e.Message);
+                Debug.LogError($"[SettingsUI] Failed to validate token: {ex.Message}");
             }
-        }
-
-        private void ShowAgentData(Agent agent)
-        {
-            _statusLabel.text = "Agent test success.";
-            _popupTitle.text = "Agent Information";
-            _popupDataContainer.Clear();
-            AddDataRow("Symbol", agent.symbol);
-            AddDataRow("Headquarters", agent.headquarters);
-            AddDataRow("Credits", agent.credits.ToString("N0"));
-            AddDataRow("Starting Faction", agent.startingFaction);
-            _popupInstance.style.display = DisplayStyle.Flex;
-            _popupOverlay.style.display = DisplayStyle.Flex;
-        }
-
-        private void ShowError(string title, string error)
-        {
-            _statusLabel.text = "Test failed.";
-            _popupTitle.text = title;
-            _popupDataContainer.Clear();
-            var errorLabel = new Label(error) { style = { color = Color.red, whiteSpace = WhiteSpace.Normal } };
-            _popupDataContainer.Add(errorLabel);
-            _popupInstance.style.display = DisplayStyle.Flex;
-            _popupOverlay.style.display = DisplayStyle.Flex;
-        }
-
-        private void AddDataRow(string key, string value)
-        {
-            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };
-            row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
-            row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
-            _popupDataContainer.Add(row);
+            finally
+            {
+                _saveButton.SetEnabled(true);
+            }
         }
     }
 }
