@@ -192,6 +192,7 @@ namespace SpaceTraders.UI
 
         private async Task SetupMapPanelAsync()
         {
+            _mapInitialized = false;
             if (_playerShips.Count == 0)
             {
                 try { var ships = await APIService.Instance.GetShips(); _playerShips = ships.data.ToList(); } catch { }
@@ -574,7 +575,7 @@ namespace SpaceTraders.UI
             
             Vector2 parentPos = GetVisualWaypointPos(parent);
             float radius = GetOrbitalRadius(wp);
-            int index = Array.FindIndex(parent.orbitals, o => o.symbol == wp.symbol);
+            int index = parent.orbitals != null ? Array.FindIndex(parent.orbitals, o => o.symbol == wp.symbol) : -1;
             float angle = (Mathf.Max(0, index) * 45f + 30f) * Mathf.Deg2Rad;
             return parentPos + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
         }
@@ -707,7 +708,7 @@ namespace SpaceTraders.UI
         private VisualElement BindShip(Ship s) {
             var element = shipTemplate.Instantiate();
             element.Q<Label>("symbol-label").text = $"Symbol: {s.symbol}";
-            element.Q<Label>("details-label").text = $"Role: {s.registration.role} | System: {s.nav.systemSymbol}";
+            element.Q<Label>("details-label").text = $"Role: {s.registration.role} | System: {s.nav.systemSymbol} | Waypoint: {s.nav.waypointSymbol}";
             element.Q<Label>("status-label").text = $"Status: {s.nav.status} | Fuel: {s.fuel.current}/{s.fuel.capacity}";
             
             var mapBtn = element.Q<Button>("show-on-map-btn");
