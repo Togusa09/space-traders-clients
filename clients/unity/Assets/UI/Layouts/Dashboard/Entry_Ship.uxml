@@ -1,10 +1,44 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:VisualElement class="dashboard-entry">
-        <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center;">
-            <ui:Label name="symbol-label" text="Symbol: SHIP-SYMBOL" class="label-important" />
-            <ui:Button name="show-on-map-btn" text="SHOW ON MAP" class="button" style="height: 25px; font-size: 10px; margin: 0;" />
+    <ui:VisualElement class="dashboard-entry" style="margin-bottom: 10px; padding: 12px;">
+        <!-- Header -->
+        <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <ui:Label name="symbol-label" text="Symbol: SHIP-SYMBOL" class="label-important" style="font-size: 15px; margin: 0;" />
+            <ui:VisualElement style="flex-direction: row;">
+                <ui:Button name="show-on-map-btn" text="MAP" class="button btn-small btn-blue" style="margin: 0; width: 60px;" />
+            </ui:VisualElement>
         </ui:VisualElement>
-        <ui:Label name="details-label" text="Role: ROLE | System: SYSTEM" />
+        
+        <!-- Status Info -->
+        <ui:Label name="details-label" text="Role: ROLE | Location: SYSTEM-WAYPOINT" />
         <ui:Label name="status-label" text="Status: STATUS | Fuel: 0/0" />
+        <ui:Label name="cargo-capacity-label" text="Cargo: 0/0" style="font-size: 11px; color: rgb(0, 180, 255); -unity-font-style: bold; margin-top: 2px;" />
+
+        <!-- Timers Area (Hidden by default, displayed via C# code) -->
+        <ui:VisualElement name="timer-container" class="timer-container" style="display: none;">
+            <ui:Label name="timer-label" text="Transit: 0s remaining" style="font-size: 10px; color: white;" />
+            <ui:VisualElement class="timer-bar-bg">
+                <ui:VisualElement name="timer-bar-fill" class="timer-bar-fill" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Actions Panel -->
+        <ui:VisualElement class="ship-details-container">
+            <ui:Label text="SHIP ACTIONS" style="font-size: 10px; color: gray; -unity-font-style: bold;" />
+            <ui:VisualElement class="action-row">
+                <ui:Button name="action-orbit-dock-btn" text="ORBIT" class="button btn-small btn-orange" style="margin: 2px;" />
+                <ui:Button name="action-extract-btn" text="EXTRACT" class="button btn-small btn-green" style="margin: 2px;" />
+                <ui:Button name="action-refuel-btn" text="REFUEL" class="button btn-small btn-blue" style="margin: 2px;" />
+                
+                <!-- Waypoint Navigation dropdown/picker -->
+                <ui:VisualElement style="flex-direction: row; align-items: center; margin-left: 5px;">
+                    <ui:Label text="Nav To:" style="font-size: 10px; color: rgb(180, 180, 180); margin-right: 3px;" />
+                    <ui:VisualElement name="nav-dropdown-placeholder" style="width: 120px; height: 25px; background-color: rgb(45, 45, 45); border-radius: 3px; justify-content: center; border-width: 1px; border-color: rgb(60, 60, 60);" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Cargo Panel -->
+            <ui:Label text="CARGO INVENTORY" class="inventory-header" />
+            <ui:VisualElement name="cargo-list-container" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

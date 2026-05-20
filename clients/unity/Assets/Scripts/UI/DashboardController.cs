@@ -68,6 +68,21 @@ namespace SpaceTraders.UI
         // Async Safety
         private int _requestSequence = 0;
 
+        // Active Cooldown/Transit timers
+        private class ActiveTimer
+        {
+            public string ShipSymbol;
+            public DateTime Expiration;
+            public double TotalDuration;
+            public bool IsCooldown;
+        }
+        private List<ActiveTimer> _activeTimers = new List<ActiveTimer>();
+
+        // Global Popup References
+        private VisualElement _popupInstance, _popupOverlay, _popupDataContainer;
+        private Label _popupTitle;
+        private Button _popupCloseButton;
+
         private void OnEnable()
         {
             var root = uiDocument.rootVisualElement;
@@ -82,7 +97,269 @@ namespace SpaceTraders.UI
 
             root.Q<Button>("back-button").clicked += () => SceneManager.LoadScene(mainMenuSceneName);
             SpaceTradersClient.Instance.SetToken(AuthManager.Instance.AgentToken);
+
+            // Global Popup Initialization
+            _popupInstance = root.Q<VisualElement>("popup-instance");
+            _popupOverlay = root.Q<VisualElement>("popup-overlay");
+            _popupDataContainer = root.Q<VisualElement>("popup-data-container");
+            _popupTitle = root.Q<Label>("popup-title");
+            _popupCloseButton = root.Q<Button>("popup-close-button");
+            if (_popupCloseButton != null)
+            {
+                _popupCloseButton.clicked += () => {
+                    _popupOverlay.style.display = DisplayStyle.None;
+                    _popupInstance.style.display = DisplayStyle.None;
+                };
+            }
+
             SwitchTab(Tab.Agent);
+        }
+
+        private void ShowPopup(string title, string content, Color? textColor = null)
+        {
+            if (_popupTitle == null || _popupDataContainer == null || _popupInstance == null || _popupOverlay == null) return;
+            _popupTitle.text = title;
+            _popupDataContainer.Clear();
+            var label = new Label(content) { style = { whiteSpace = WhiteSpace.Normal, color = textColor ?? Color.white } };
+            _popupDataContainer.Add(label);
+            
+            // Restore default close button
+            if (_popupCloseButton != null) _popupCloseButton.style.display = DisplayStyle.Flex;
+
+            _popupInstance.style.display = DisplayStyle.Flex;
+            _popupOverlay.style.display = DisplayStyle.Flex;
+        }
+
+        private void ShowChoicePopup(string title, string content, string confirmText, Func<Task> onConfirm, string cancelText = "CANCEL")
+        {
+            if (_popupTitle == null || _popupDataContainer == null || _popupInstance == null || _popupOverlay == null) return;
+            _popupTitle.text = title;
+            _popupDataContainer.Clear();
+            
+            var label = new Label(content) { style = { whiteSpace = WhiteSpace.Normal, color = Color.white, marginBottom = 15 } };
+            _popupDataContainer.Add(label);
+
+            var buttonRow = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.FlexEnd } };
+
+            var cancelBtn = new Button(() => {
+                _popupOverlay.style.display = DisplayStyle.None;
+                _popupInstance.style.display = DisplayStyle.None;
+            }) { text = cancelText };
+            cancelBtn.AddToClassList("button");
+            cancelBtn.AddToClassList("btn-small");
+            cancelBtn.AddToClassList("btn-red");
+            cancelBtn.style.width = 100; cancelBtn.style.height = 25;
+            buttonRow.Add(cancelBtn);
+
+            var confirmBtn = new Button(async () => {
+                _popupOverlay.style.display = DisplayStyle.None;
+                _popupInstance.style.display = DisplayStyle.None;
+                await onConfirm();
+            }) { text = confirmText };
+            confirmBtn.AddToClassList("button");
+            confirmBtn.AddToClassList("btn-small");
+            confirmBtn.AddToClassList("btn-green");
+            confirmBtn.style.width = 150; confirmBtn.style.height = 25;
+            buttonRow.Add(confirmBtn);
+
+            _popupDataContainer.Add(buttonRow);
+            
+            // Hide default close button
+            if (_popupCloseButton != null) _popupCloseButton.style.display = DisplayStyle.None;
+
+            _popupInstance.style.display = DisplayStyle.Flex;
+            _popupOverlay.style.display = DisplayStyle.Flex;
+        }
+
+        private void HandleNavigationResponse(string shipSymbol, NavigateResponse res, string destinationSymbol)
+        {
+            if (res?.data?.nav?.route == null) return;
+
+            string depTimeStr = res.data.nav.route.departureTime;
+            string arrTimeStr = res.data.nav.route.arrivalTime;
+
+            DateTime departure = !string.IsNullOrEmpty(depTimeStr)
+                ? DateTime.Parse(depTimeStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                : DateTime.UtcNow;
+
+            DateTime arrival = !string.IsNullOrEmpty(arrTimeStr)
+                ? DateTime.Parse(arrTimeStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                : DateTime.UtcNow.AddSeconds(60);
+
+            double duration = (arrival - departure).TotalSeconds;
+
+            _activeTimers.RemoveAll(t => t.ShipSymbol == shipSymbol && !t.IsCooldown);
+            _activeTimers.Add(new ActiveTimer
+            {
+                ShipSymbol = shipSymbol,
+                Expiration = arrival,
+                TotalDuration = duration > 0 ? duration : 60,
+                IsCooldown = false
+            });
+
+            ShowPopup("Navigation Initiated", $"Ship {shipSymbol} is in transit to {destinationSymbol}!\nEstimated Arrival: {res.data.nav.route.arrivalTime}", Color.green);
+        }
+
+        private void UpdateActiveTimersFromShips(List<Ship> ships)
+        {
+            if (ships == null) return;
+            DateTime now = DateTime.UtcNow;
+
+            foreach (var s in ships)
+            {
+                // Sync transit timer if ship is currently in transit on server
+                if (s.nav != null && s.nav.status == "IN_TRANSIT" && s.nav.route != null)
+                {
+                    _activeTimers.RemoveAll(t => t.ShipSymbol == s.symbol && !t.IsCooldown);
+                    try
+                    {
+                        string depTimeStr = s.nav.route.departureTime;
+                        string arrTimeStr = s.nav.route.arrivalTime;
+
+                        DateTime departure = !string.IsNullOrEmpty(depTimeStr)
+                            ? DateTime.Parse(depTimeStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                            : DateTime.UtcNow;
+
+                        DateTime arrival = !string.IsNullOrEmpty(arrTimeStr)
+                            ? DateTime.Parse(arrTimeStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                            : DateTime.UtcNow.AddSeconds(60);
+
+                        double remaining = (arrival - now).TotalSeconds;
+                        if (remaining > 0)
+                        {
+                            double duration = (arrival - departure).TotalSeconds;
+                            _activeTimers.Add(new ActiveTimer
+                            {
+                                ShipSymbol = s.symbol,
+                                Expiration = arrival,
+                                TotalDuration = duration > 0 ? duration : 60,
+                                IsCooldown = false
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[DashboardController] Failed to parse transit times for {s.symbol}: {ex.Message}");
+                    }
+                }
+                else if (s.nav != null && s.nav.status != "IN_TRANSIT")
+                {
+                    // If ship is no longer in transit on the server, remove transit timer
+                    _activeTimers.RemoveAll(t => t.ShipSymbol == s.symbol && !t.IsCooldown);
+                }
+            }
+        }
+
+        private async Task PopulateNavDropdown(DropdownField dropdown, Ship s)
+        {
+            try
+            {
+                bool isInTransit = s.nav.status == "IN_TRANSIT" || _activeTimers.Any(t => t.ShipSymbol == s.symbol && !t.IsCooldown);
+                if (isInTransit)
+                {
+                    dropdown.choices = new List<string> { "In Transit" };
+                    dropdown.value = "In Transit";
+                    dropdown.SetEnabled(false);
+                    return;
+                }
+                var sys = await APIService.Instance.GetSystem(s.nav.systemSymbol);
+                if (sys != null && sys.data != null && sys.data.waypoints != null)
+                {
+                    var wps = sys.data.waypoints.Select(w => w.symbol).ToList();
+                    dropdown.choices = wps;
+                    dropdown.value = s.nav.waypointSymbol;
+                    dropdown.RegisterValueChangedCallback(async evt => {
+                        if (evt.newValue == s.nav.waypointSymbol || evt.newValue == "Loading..." || evt.newValue == "In Transit") return;
+                        
+                        // Check if in orbit
+                        if (s.nav.status != "IN_ORBIT")
+                        {
+                            ShowChoicePopup("Ship is Docked",
+                                $"Ship {s.symbol} must be in orbit before navigating. Orbit now and proceed to {evt.newValue}?",
+                                "ORBIT & NAVIGATE",
+                                async () => {
+                                    _statusLabel.text = $"Orbiting and navigating {s.symbol} to {evt.newValue}...";
+                                    try
+                                    {
+                                        await APIService.Instance.OrbitShip(s.symbol);
+                                        var res = await APIService.Instance.NavigateShip(s.symbol, evt.newValue);
+                                        HandleNavigationResponse(s.symbol, res, evt.newValue);
+                                        SwitchTab(Tab.Fleet);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ShowPopup("Navigation Failed", $"Failed to orbit and navigate:\n{ex.Message}", Color.red);
+                                    }
+                                }
+                            );
+                            dropdown.SetValueWithoutNotify(s.nav.waypointSymbol);
+                            return;
+                        }
+
+                        _statusLabel.text = $"Navigating {s.symbol} to {evt.newValue}...";
+                        try
+                        {
+                            var res = await APIService.Instance.NavigateShip(s.symbol, evt.newValue);
+                            HandleNavigationResponse(s.symbol, res, evt.newValue);
+                            SwitchTab(Tab.Fleet);
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowPopup("Navigation Failed", $"Failed to navigate:\n{ex.Message}", Color.red);
+                            dropdown.SetValueWithoutNotify(s.nav.waypointSymbol);
+                        }
+                    });
+                }
+            }
+            catch
+            {
+                dropdown.choices = new List<string> { "Error loading" };
+            }
+        }
+
+        private void Update()
+        {
+            if (_activeTimers.Count == 0) return;
+
+            DateTime now = DateTime.UtcNow;
+            for (int i = _activeTimers.Count - 1; i >= 0; i--)
+            {
+                var timer = _activeTimers[i];
+                double remaining = (timer.Expiration - now).TotalSeconds;
+                if (remaining <= 0)
+                {
+                    _activeTimers.RemoveAt(i);
+                    // Refresh visual elements to enable buttons again when finished
+                    if (_currentTab == Tab.Fleet) SwitchTab(Tab.Fleet);
+                    continue;
+                }
+
+                var card = _dataContainer.Q<VisualElement>($"ship-{timer.ShipSymbol}");
+                if (card != null)
+                {
+                    var container = card.Q<VisualElement>("timer-container");
+                    if (container != null)
+                    {
+                        container.style.display = DisplayStyle.Flex;
+                        var label = card.Q<Label>("timer-label");
+                        var bar = card.Q<VisualElement>("timer-bar-fill");
+                        
+                        if (timer.IsCooldown)
+                        {
+                            label.text = $"Mining Cooldown: {Mathf.CeilToInt((float)remaining)}s remaining";
+                            bar.AddToClassList("timer-bar-fill--cooldown");
+                        }
+                        else
+                        {
+                            label.text = $"Transit: {Mathf.CeilToInt((float)remaining)}s remaining";
+                            bar.RemoveFromClassList("timer-bar-fill--cooldown");
+                        }
+
+                        float pct = Mathf.Clamp01(1f - ((float)remaining / (float)timer.TotalDuration));
+                        bar.style.width = Length.Percent(pct * 100f);
+                    }
+                }
+            }
         }
 
         private void RegisterTab(Tab tab, Button button)
@@ -136,6 +413,7 @@ namespace SpaceTraders.UI
                         var ships = await APIService.Instance.GetShips();
                         if (sequence == _requestSequence) {
                             _playerShips = ships.data.ToList();
+                            UpdateActiveTimersFromShips(_playerShips);
                             DisplayList(Tab.Fleet, ships.data);
                         }
                         break;
@@ -195,7 +473,11 @@ namespace SpaceTraders.UI
             _mapInitialized = false;
             if (_playerShips.Count == 0)
             {
-                try { var ships = await APIService.Instance.GetShips(); _playerShips = ships.data.ToList(); } catch { }
+                try {
+                    var ships = await APIService.Instance.GetShips();
+                    _playerShips = ships.data.ToList();
+                    UpdateActiveTimersFromShips(_playerShips);
+                } catch { }
             }
 
             var panel = systemPanelTemplate.Instantiate();
@@ -393,10 +675,61 @@ namespace SpaceTraders.UI
             root.style.marginLeft = indent * 15;
             entry.Q<Label>("symbol-label").text = (indent > 0 ? "↳ " : "") + wp.symbol;
             entry.Q<Label>("details-label").text = wp.type;
+
+            // Render facility badges if traits are available
+            if (wp.traits != null && wp.traits.Length > 0)
+            {
+                var badgesRow = new VisualElement { style = { flexDirection = FlexDirection.Row, marginTop = 3 } };
+                bool hasBadges = false;
+                foreach (var trait in wp.traits)
+                {
+                    if (trait.symbol == "MARKETPLACE")
+                    {
+                        var badge = CreateBadge("MARKET", new Color(0.12f, 0.58f, 0.39f), Color.white);
+                        badgesRow.Add(badge);
+                        hasBadges = true;
+                    }
+                    else if (trait.symbol == "SHIPYARD")
+                    {
+                        var badge = CreateBadge("SHIPYARD", new Color(0.1f, 0.45f, 0.82f), Color.white);
+                        badgesRow.Add(badge);
+                        hasBadges = true;
+                    }
+                }
+                if (hasBadges)
+                {
+                    root.Add(badgesRow);
+                }
+            }
+
             if (wp.symbol == _selectedSymbol) root.AddToClassList("selected-entry");
             root.RegisterCallback<ClickEvent>(evt => SelectWaypoint(wp, root, false));
             container.Add(entry);
             _listEntries.Add(root);
+        }
+
+        private VisualElement CreateBadge(string text, Color backgroundColor, Color textColor)
+        {
+            var badge = new Label(text)
+            {
+                style =
+                {
+                    backgroundColor = backgroundColor,
+                    color = textColor,
+                    fontSize = 8,
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    paddingLeft = 4,
+                    paddingRight = 4,
+                    paddingTop = 1,
+                    paddingBottom = 1,
+                    marginRight = 4,
+                    borderTopLeftRadius = 2,
+                    borderTopRightRadius = 2,
+                    borderBottomLeftRadius = 2,
+                    borderBottomRightRadius = 2
+                }
+            };
+            return badge;
         }
 
         private void SelectGalaxySystem(DatabaseManager.IndexedSystem sys, VisualElement entryRoot, bool focus)
@@ -463,6 +796,21 @@ namespace SpaceTraders.UI
                 if (res != null && res.data != null)
                 {
                     _currentSystem = res.data;
+
+                    // Fetch full waypoint details with traits
+                    try
+                    {
+                        var wpsRes = await APIService.Instance.GetSystemWaypoints(symbol);
+                        if (wpsRes != null && wpsRes.data != null)
+                        {
+                            _currentSystem.waypoints = wpsRes.data;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[DashboardController] Failed to load waypoint traits: {ex.Message}");
+                    }
+
                     _selectedSymbol = focusWaypoint; 
                     _mapMode = MapMode.System; // Pre-set mode for SetupMapPanelAsync
                     SwitchTab(Tab.Map);
@@ -705,21 +1053,328 @@ namespace SpaceTraders.UI
             for (float y = startY; y <= rect.height + 1; y += size) { painter.BeginPath(); painter.MoveTo(new Vector2(0, y)); painter.LineTo(new Vector2(rect.width, y)); painter.Stroke(); }
         }
 
-        private VisualElement BindShip(Ship s) {
+        private VisualElement BindShip(Ship s)
+        {
             var element = shipTemplate.Instantiate();
-            element.Q<Label>("symbol-label").text = $"Symbol: {s.symbol}";
-            element.Q<Label>("details-label").text = $"Role: {s.registration.role} | System: {s.nav.systemSymbol} | Waypoint: {s.nav.waypointSymbol}";
-            element.Q<Label>("status-label").text = $"Status: {s.nav.status} | Fuel: {s.fuel.current}/{s.fuel.capacity}";
+            var root = element.Q<VisualElement>(null, "dashboard-entry");
+            if (root == null) root = element.Q<VisualElement>();
             
+            // Name the root element so we can find it in Update() for timers
+            root.name = $"ship-{s.symbol}";
+
+            element.Q<Label>("symbol-label").text = s.symbol;
+            element.Q<Label>("details-label").text = $"Role: {s.registration.role} | Location: {s.nav.waypointSymbol}";
+            element.Q<Label>("status-label").text = $"Status: {s.nav.status} | Fuel: {s.fuel.current}/{s.fuel.capacity}";
+            element.Q<Label>("cargo-capacity-label").text = $"Cargo: {s.cargo.units}/{s.cargo.capacity}";
+
+            bool isInTransit = s.nav.status == "IN_TRANSIT" || _activeTimers.Any(t => t.ShipSymbol == s.symbol && !t.IsCooldown);
+            bool isCooldownActive = _activeTimers.Any(t => t.ShipSymbol == s.symbol && t.IsCooldown);
+
+            // Map button
             var mapBtn = element.Q<Button>("show-on-map-btn");
             if (mapBtn != null)
             {
                 mapBtn.clicked += () => _ = OpenSystem(s.nav.systemSymbol, s.nav.waypointSymbol);
             }
+
+            // Orbit/Dock button
+            var orbitDockBtn = element.Q<Button>("action-orbit-dock-btn");
+            if (orbitDockBtn != null)
+            {
+                bool isDocked = s.nav.status == "DOCKED";
+                orbitDockBtn.text = isDocked ? "ORBIT" : "DOCK";
+                orbitDockBtn.SetEnabled(!isInTransit);
+                orbitDockBtn.clicked += async () => {
+                    _statusLabel.text = isDocked ? "Transitioning to orbit..." : "Docking ship...";
+                    try
+                    {
+                        if (isDocked)
+                            await APIService.Instance.OrbitShip(s.symbol);
+                        else
+                            await APIService.Instance.DockShip(s.symbol);
+                        
+                        ShowPopup("Ship Status Changed", $"Ship {s.symbol} successfully {(isDocked ? "entered orbit" : "docked")}!", Color.green);
+                        SwitchTab(Tab.Fleet);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowPopup("Action Failed", $"Failed to change status:\n{ex.Message}", Color.red);
+                    }
+                };
+            }
+
+            // Extract button
+            var extractBtn = element.Q<Button>("action-extract-btn");
+            if (extractBtn != null)
+            {
+                bool canExtract = s.nav.status == "IN_ORBIT" && s.nav.waypointSymbol.Contains("ASTEROID") && !isInTransit && !isCooldownActive;
+                extractBtn.SetEnabled(canExtract);
+                extractBtn.clicked += async () => {
+                    _statusLabel.text = "Extracting resources...";
+                    try
+                    {
+                        var res = await APIService.Instance.ExtractResources(s.symbol);
+                        ShowPopup("Extraction Complete", $"Yield: {res.data.extraction.yield.units} units of {res.data.extraction.yield.symbol}!\nCooldown: {res.data.cooldown.totalSeconds}s", Color.green);
+                        
+                        // Add cooldown timer safely
+                        string expStr = res.data?.cooldown?.expiration;
+                        DateTime expiration = !string.IsNullOrEmpty(expStr)
+                            ? DateTime.Parse(expStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                            : DateTime.UtcNow.AddSeconds(res.data?.cooldown?.totalSeconds ?? 0);
+
+                        _activeTimers.RemoveAll(t => t.ShipSymbol == s.symbol && t.IsCooldown);
+                        _activeTimers.Add(new ActiveTimer {
+                            ShipSymbol = s.symbol,
+                            Expiration = expiration,
+                            TotalDuration = res.data.cooldown.totalSeconds,
+                            IsCooldown = true
+                        });
+
+                        SwitchTab(Tab.Fleet);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowPopup("Extraction Failed", $"Failed to extract:\n{ex.Message}", Color.red);
+                    }
+                };
+            }
+
+            // Refuel button
+            var refuelBtn = element.Q<Button>("action-refuel-btn");
+            if (refuelBtn != null)
+            {
+                bool canRefuel = s.nav.status == "DOCKED" && !isInTransit;
+                refuelBtn.SetEnabled(canRefuel);
+                refuelBtn.clicked += async () => {
+                    _statusLabel.text = "Refueling ship...";
+                    try
+                    {
+                        await APIService.Instance.RefuelShip(s.symbol);
+                        ShowPopup("Refueling Successful", $"Ship {s.symbol} successfully refueled!", Color.green);
+                        SwitchTab(Tab.Fleet);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowPopup("Refuel Failed", $"Failed to refuel:\n{ex.Message}", Color.red);
+                    }
+                };
+            }
+
+            // Navigation Dropdown
+            var dropdownPlaceholder = element.Q<VisualElement>("nav-dropdown-placeholder");
+            if (dropdownPlaceholder != null)
+            {
+                var dropdown = new DropdownField();
+                dropdown.style.flexGrow = 1;
+                dropdown.style.height = Length.Percent(100);
+                dropdownPlaceholder.Add(dropdown);
+                
+                if (isInTransit)
+                {
+                    dropdown.choices = new List<string> { "In Transit" };
+                    dropdown.value = "In Transit";
+                    dropdown.SetEnabled(false);
+                }
+                else
+                {
+                    dropdown.choices = new List<string> { "Loading..." };
+                    dropdown.value = "Loading...";
+                    _ = PopulateNavDropdown(dropdown, s);
+                }
+            }
+
+            // Render cargo list
+            var cargoListContainer = element.Q<VisualElement>("cargo-list-container");
+            if (cargoListContainer != null)
+            {
+                cargoListContainer.Clear();
+                if (s.cargo.inventory == null || s.cargo.inventory.Length == 0)
+                {
+                    cargoListContainer.Add(new Label("Empty cargo bay") { style = { fontSize = 10, color = Color.gray } });
+                }
+                else
+                {
+                    foreach (var item in s.cargo.inventory)
+                    {
+                        var row = new VisualElement();
+                        row.AddToClassList("inventory-row");
+                        
+                        row.Add(new Label($"{item.name} ({item.units} units)") { style = { fontSize = 10 } });
+
+                        if (s.nav.status == "DOCKED")
+                        {
+                            var sellBtn = new Button(async () => {
+                                _statusLabel.text = $"Selling {item.symbol}...";
+                                try
+                                {
+                                    var res = await APIService.Instance.SellCargo(s.symbol, item.symbol, item.units);
+                                    ShowPopup("Cargo Sold", $"Sold {item.units} units of {item.symbol}!\nCredits gained: {res.data.transaction.totalPrice:N0} C", Color.green);
+                                    SwitchTab(Tab.Fleet);
+                                }
+                                catch (Exception ex)
+                                {
+                                    ShowPopup("Sale Failed", $"Failed to sell cargo:\n{ex.Message}", Color.red);
+                                }
+                            }) { text = "SELL ALL" };
+                            sellBtn.AddToClassList("button");
+                            sellBtn.AddToClassList("btn-small");
+                            sellBtn.AddToClassList("btn-red");
+                            sellBtn.style.width = 65; sellBtn.style.height = 20; sellBtn.style.fontSize = 8;
+                            row.Add(sellBtn);
+                        }
+
+                        cargoListContainer.Add(row);
+                    }
+                }
+            }
+
+            // Transit/Cooldown countdown display if active
+            var timerContainer = element.Q<VisualElement>("timer-container");
+            var timer = _activeTimers.FirstOrDefault(t => t.ShipSymbol == s.symbol);
+            if (timer != null && timerContainer != null)
+            {
+                double remaining = (timer.Expiration - DateTime.UtcNow).TotalSeconds;
+                if (remaining > 0)
+                {
+                    timerContainer.style.display = DisplayStyle.Flex;
+                    var label = element.Q<Label>("timer-label");
+                    var bar = element.Q<VisualElement>("timer-bar-fill");
+                    if (timer.IsCooldown)
+                    {
+                        label.text = $"Mining Cooldown: {Mathf.CeilToInt((float)remaining)}s remaining";
+                        bar.AddToClassList("timer-bar-fill--cooldown");
+                    }
+                    else
+                    {
+                        label.text = $"Transit: {Mathf.CeilToInt((float)remaining)}s remaining";
+                        bar.RemoveFromClassList("timer-bar-fill--cooldown");
+                    }
+                    float pct = Mathf.Clamp01(1f - ((float)remaining / (float)timer.TotalDuration));
+                    bar.style.width = Length.Percent(pct * 100f);
+                }
+            }
+
             return element;
         }
 
-        private VisualElement BindContract(Contract c) { var element = contractTemplate.Instantiate(); element.Q<Label>("id-label").text = $"ID: {c.id}"; element.Q<Label>("type-label").text = $"Type: {c.type} | Faction: {c.factionSymbol}"; element.Q<Label>("status-label").text = $"Accepted: {c.accepted} | Fulfilled: {c.fulfilled}"; return element; }
+        private VisualElement BindContract(Contract c)
+        {
+            var element = contractTemplate.Instantiate();
+            var root = element.Q<VisualElement>(null, "dashboard-entry");
+            if (root == null) root = element.Q<VisualElement>();
+
+            element.Q<Label>("id-label").text = $"ID: {c.id}";
+            element.Q<Label>("type-label").text = $"Type: {c.type} | Faction: {c.factionSymbol}";
+            element.Q<Label>("status-label").text = $"Accepted: {(c.accepted ? "Yes" : "No")} | Fulfilled: {(c.fulfilled ? "Yes" : "No")}";
+
+            // Detailed Panel
+            var detailsContainer = new VisualElement();
+            detailsContainer.AddToClassList("ship-details-container");
+            root.Add(detailsContainer);
+
+            // Payments
+            detailsContainer.Add(new Label($"Payment: Upfront: {c.terms.payment.onAccepted:N0} C | Completion: {c.terms.payment.onFulfilled:N0} C") { style = { fontSize = 11, color = Color.gray } });
+            detailsContainer.Add(new Label($"Deadline: {c.terms.deadline}") { style = { fontSize = 11, color = Color.gray, marginBottom = 5 } });
+
+            if (!c.accepted)
+            {
+                var acceptBtn = new Button(async () => {
+                    _statusLabel.text = "Accepting contract...";
+                    try
+                    {
+                        await APIService.Instance.AcceptContract(c.id);
+                        ShowPopup("Contract Accepted", $"Contract accepted successfully!\nCredits Received upfront: {c.terms.payment.onAccepted:N0} C", Color.green);
+                        SwitchTab(Tab.Contracts);
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowPopup("Accept Failed", $"Failed to accept contract:\n{ex.Message}", Color.red);
+                    }
+                }) { text = "ACCEPT CONTRACT" };
+                acceptBtn.AddToClassList("button");
+                acceptBtn.AddToClassList("btn-small");
+                acceptBtn.AddToClassList("btn-green");
+                acceptBtn.style.width = 150; acceptBtn.style.height = 25;
+                detailsContainer.Add(acceptBtn);
+            }
+            else if (!c.fulfilled)
+            {
+                detailsContainer.Add(new Label("Deliverables:") { style = { fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 5 } });
+                bool allFulfilled = true;
+
+                foreach (var d in c.terms.deliver)
+                {
+                    int remaining = d.unitsRequired - d.unitsFulfilled;
+                    if (remaining > 0) allFulfilled = false;
+
+                    var delivRow = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, alignItems = Align.Center, marginTop = 2, marginBottom = 2 } };
+                    delivRow.Add(new Label($"• {d.tradeSymbol} to {d.destinationSymbol}: {d.unitsFulfilled}/{d.unitsRequired} units") { style = { fontSize = 11 } });
+                    detailsContainer.Add(delivRow);
+
+                    if (remaining > 0)
+                    {
+                        // Check if any ship is docked at d.destinationSymbol and has d.tradeSymbol
+                        foreach (var ship in _playerShips)
+                        {
+                            if (ship.nav.status == "DOCKED" && ship.nav.waypointSymbol == d.destinationSymbol)
+                            {
+                                var cargoItem = ship.cargo.inventory?.FirstOrDefault(i => i.symbol == d.tradeSymbol);
+                                if (cargoItem != null && cargoItem.units > 0)
+                                {
+                                    int unitsToDeliver = Math.Min(cargoItem.units, remaining);
+                                    var deliverBtn = new Button(async () => {
+                                        _statusLabel.text = "Delivering cargo...";
+                                        try
+                                        {
+                                            await APIService.Instance.DeliverContractCargo(c.id, ship.symbol, d.tradeSymbol, unitsToDeliver);
+                                            ShowPopup("Cargo Delivered", $"Successfully delivered {unitsToDeliver} units of {d.tradeSymbol} from ship {ship.symbol}!", Color.green);
+                                            SwitchTab(Tab.Contracts);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            ShowPopup("Delivery Failed", $"Failed to deliver cargo:\n{ex.Message}", Color.red);
+                                        }
+                                    }) { text = $"DELIVER FROM {ship.symbol} ({unitsToDeliver})" };
+                                    deliverBtn.AddToClassList("button");
+                                    deliverBtn.AddToClassList("btn-small");
+                                    deliverBtn.AddToClassList("btn-orange");
+                                    deliverBtn.style.width = 180; deliverBtn.style.height = 20; deliverBtn.style.fontSize = 9;
+                                    detailsContainer.Add(deliverBtn);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (allFulfilled)
+                {
+                    var fulfillBtn = new Button(async () => {
+                        _statusLabel.text = "Fulfilling contract...";
+                        try
+                        {
+                            await APIService.Instance.FulfillContract(c.id);
+                            ShowPopup("Contract Fulfilled", $"Contract fulfilled successfully!\nCredits Received on fulfillment: {c.terms.payment.onFulfilled:N0} C", Color.green);
+                            SwitchTab(Tab.Contracts);
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowPopup("Fulfillment Failed", $"Failed to fulfill contract:\n{ex.Message}", Color.red);
+                        }
+                    }) { text = "FULFILL CONTRACT" };
+                    fulfillBtn.AddToClassList("button");
+                    fulfillBtn.AddToClassList("btn-small");
+                    fulfillBtn.AddToClassList("btn-blue");
+                    fulfillBtn.style.width = 150; fulfillBtn.style.height = 25;
+                    detailsContainer.Add(fulfillBtn);
+                }
+            }
+            else
+            {
+                detailsContainer.Add(new Label("Contract Completed") { style = { color = Color.green, fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold } });
+            }
+
+            return element;
+        }
         private VisualElement BindFaction(Faction f) { var element = factionTemplate.Instantiate(); element.Q<Label>("name-label").text = $"Name: {f.name}"; element.Q<Label>("details-label").text = $"Symbol: {f.symbol} | HQ: {f.headquarters}"; element.Q<Label>("description-label").text = f.description; return element; }
         private void AddRow(VisualElement root, string key, string value) { var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } }; row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } }); row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } }); root.Add(row); }
 
@@ -762,6 +1417,8 @@ namespace SpaceTraders.UI
                     foreach(var conn in res.data.connections) _extraContentContainer.Add(new Label($"• {conn}") { style = { fontSize = 11 } });
                 }
                 else { _extraInfoTitle.text = "Basic Waypoint"; }
+                
+                RenderWaypointActions(wp);
             }
             catch (Exception e) { _extraInfoTitle.text = "Error loading info"; Debug.LogError(e.Message); }
         }
@@ -799,15 +1456,43 @@ namespace SpaceTraders.UI
             {
                 foreach (var ship in s.ships)
                 {
-                    var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, marginBottom = 2 } };
-                    row.Add(new Label(ship.name) { style = { fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold, flexGrow = 1 } });
-                    row.Add(new Label($"{ship.purchasePrice:N0} C") { style = { fontSize = 11, color = Color.yellow } });
+                    var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, alignItems = Align.Center, marginBottom = 4 } };
+                    
+                    var nameLabel = new Label(ship.name) { style = { fontSize = 10, unityFontStyleAndWeight = FontStyle.Bold, flexGrow = 1 } };
+                    row.Add(nameLabel);
+                    
+                    var priceLabel = new Label($"{ship.purchasePrice:N0} C") { style = { fontSize = 10, color = Color.yellow, marginRight = 10 } };
+                    row.Add(priceLabel);
+
+                    var buyBtn = new Button(async () => {
+                        _statusLabel.text = $"Purchasing {ship.type}...";
+                        try
+                        {
+                            var res = await APIService.Instance.PurchaseShip(ship.type, s.symbol);
+                            ShowPopup("Ship Purchased", $"Successfully purchased {ship.name}!\nShip Symbol: {res.data.ship.symbol}\nCredits Remaining: {res.data.agent.credits:N0} C", Color.green);
+                            
+                            // Refresh fleet and shipyard details
+                            var newShips = await APIService.Instance.GetShips();
+                            _playerShips = newShips.data.ToList();
+                            _ = FetchWaypointDetails(_currentSystem.waypoints.FirstOrDefault(w => w.symbol == s.symbol));
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowPopup("Purchase Failed", $"Failed to purchase ship:\n{ex.Message}", Color.red);
+                        }
+                    }) { text = "BUY" };
+                    buyBtn.AddToClassList("button");
+                    buyBtn.AddToClassList("btn-small");
+                    buyBtn.AddToClassList("btn-green");
+                    buyBtn.style.width = 50; buyBtn.style.height = 20; buyBtn.style.fontSize = 8;
+                    row.Add(buyBtn);
+
                     _extraContentContainer.Add(row);
                 }
             }
             else if (s.shipTypes != null)
             {
-                _extraContentContainer.Add(new Label("Available Models:") { style = { fontSize = 10, color = Color.gray } });
+                _extraContentContainer.Add(new Label("Available Models (Bring ship here to see details):") { style = { fontSize = 10, color = Color.gray } });
                 foreach(var type in s.shipTypes) _extraContentContainer.Add(new Label($"• {type}") { style = { fontSize = 11 } });
             }
         }
@@ -821,6 +1506,166 @@ namespace SpaceTraders.UI
                 var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, marginBottom = 2 } };
                 row.Add(new Label(m.tradeSymbol) { style = { fontSize = 11, flexGrow = 1 } });
                 row.Add(new Label($"{m.fulfilled}/{m.required}") { style = { fontSize = 11, color = m.fulfilled >= m.required ? Color.green : Color.white } });
+                _extraContentContainer.Add(row);
+            }
+        }
+
+        private void RenderWaypointActions(SystemWaypoint wp)
+        {
+            if (_playerShips == null || _playerShips.Count == 0) return;
+
+            var divider = new VisualElement { style = { height = 1, backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f), marginTop = 10, marginBottom = 5 } };
+            _extraContentContainer.Add(divider);
+            _extraContentContainer.Add(new Label("SHIP IN-SYSTEM ACTIONS") { style = { fontSize = 10, color = Color.gray, unityFontStyleAndWeight = FontStyle.Bold, marginBottom = 4 } });
+
+            string systemSymbol = _currentSystem?.symbol ?? wp.symbol.Split('-')[0];
+            var systemShips = _playerShips.Where(s => s.nav.systemSymbol == systemSymbol).ToList();
+
+            if (systemShips.Count == 0)
+            {
+                _extraContentContainer.Add(new Label("No ships in this system.") { style = { fontSize = 9, color = Color.gray } });
+                return;
+            }
+
+            foreach (var ship in systemShips)
+            {
+                var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, alignItems = Align.Center, marginBottom = 3 } };
+                row.Add(new Label($"{ship.symbol} ({ship.nav.status})") { style = { fontSize = 9 } });
+
+                bool isInTransit = ship.nav.status == "IN_TRANSIT" || _activeTimers.Any(t => t.ShipSymbol == ship.symbol && !t.IsCooldown);
+                bool isCooldownActive = _activeTimers.Any(t => t.ShipSymbol == ship.symbol && t.IsCooldown);
+
+                if (ship.nav.waypointSymbol != wp.symbol)
+                {
+                    // Show navigate button
+                    var navBtn = new Button(async () => {
+                        // Check if in orbit
+                        if (ship.nav.status != "IN_ORBIT")
+                        {
+                            ShowChoicePopup("Ship is Docked",
+                                $"Ship {ship.symbol} must be in orbit before navigating. Orbit now and proceed to {wp.symbol}?",
+                                "ORBIT & NAVIGATE",
+                                async () => {
+                                    _statusLabel.text = $"Orbiting and navigating {ship.symbol} to {wp.symbol}...";
+                                    try
+                                    {
+                                        await APIService.Instance.OrbitShip(ship.symbol);
+                                        var res = await APIService.Instance.NavigateShip(ship.symbol, wp.symbol);
+                                        HandleNavigationResponse(ship.symbol, res, wp.symbol);
+                                        
+                                        // Refresh
+                                        var newShips = await APIService.Instance.GetShips();
+                                        _playerShips = newShips.data.ToList();
+                                        UpdateActiveTimersFromShips(_playerShips);
+                                        SelectWaypoint(wp, null, false);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ShowPopup("Navigation Failed", $"Failed to orbit and navigate:\n{ex.Message}", Color.red);
+                                    }
+                                }
+                            );
+                            return;
+                        }
+
+                        _statusLabel.text = $"Navigating {ship.symbol} here...";
+                        try
+                        {
+                            var res = await APIService.Instance.NavigateShip(ship.symbol, wp.symbol);
+                            HandleNavigationResponse(ship.symbol, res, wp.symbol);
+
+                            // Refresh
+                            var newShips = await APIService.Instance.GetShips();
+                            _playerShips = newShips.data.ToList();
+                            UpdateActiveTimersFromShips(_playerShips);
+                            SelectWaypoint(wp, null, false);
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowPopup("Navigation Failed", $"Failed to navigate:\n{ex.Message}", Color.red);
+                        }
+                    }) { text = isInTransit ? "IN TRANSIT" : "NAV HERE" };
+                    navBtn.AddToClassList("button");
+                    navBtn.AddToClassList("btn-small");
+                    navBtn.AddToClassList("btn-blue");
+                    navBtn.style.width = 75; navBtn.style.height = 18; navBtn.style.fontSize = 8;
+                    navBtn.SetEnabled(!isInTransit);
+                    row.Add(navBtn);
+                }
+                else
+                {
+                    // Ship is already here! Show quick local context actions
+                    var localRow = new VisualElement { style = { flexDirection = FlexDirection.Row } };
+                    
+                    if (wp.type == "ASTEROID_FIELD" && ship.nav.status == "IN_ORBIT")
+                    {
+                        var extBtn = new Button(async () => {
+                            _statusLabel.text = "Extracting resources...";
+                            try
+                            {
+                                var res = await APIService.Instance.ExtractResources(ship.symbol);
+                                ShowPopup("Extraction Complete", $"Yield: {res.data.extraction.yield.units} units of {res.data.extraction.yield.symbol}!", Color.green);
+                                
+                                string expStr = res.data?.cooldown?.expiration;
+                                DateTime expiration = !string.IsNullOrEmpty(expStr)
+                                    ? DateTime.Parse(expStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal)
+                                    : DateTime.UtcNow.AddSeconds(res.data?.cooldown?.totalSeconds ?? 0);
+
+                                _activeTimers.RemoveAll(t => t.ShipSymbol == ship.symbol && t.IsCooldown);
+                                _activeTimers.Add(new ActiveTimer {
+                                    ShipSymbol = ship.symbol,
+                                    Expiration = expiration,
+                                    TotalDuration = res.data.cooldown.totalSeconds,
+                                    IsCooldown = true
+                                });
+
+                                var newShips = await APIService.Instance.GetShips();
+                                _playerShips = newShips.data.ToList();
+                                UpdateActiveTimersFromShips(_playerShips);
+                                SelectWaypoint(wp, null, false);
+                            }
+                            catch (Exception ex)
+                            {
+                                ShowPopup("Extraction Failed", $"Failed to extract:\n{ex.Message}", Color.red);
+                            }
+                        }) { text = "EXTRACT" };
+                        extBtn.AddToClassList("button");
+                        extBtn.AddToClassList("btn-small");
+                        extBtn.AddToClassList("btn-green");
+                        extBtn.style.width = 65; extBtn.style.height = 18; extBtn.style.fontSize = 8;
+                        extBtn.SetEnabled(!isInTransit && !isCooldownActive);
+                        localRow.Add(extBtn);
+                    }
+                    
+                    if (ship.nav.status == "DOCKED")
+                    {
+                        var refBtn = new Button(async () => {
+                            _statusLabel.text = "Refueling ship...";
+                            try
+                            {
+                                await APIService.Instance.RefuelShip(ship.symbol);
+                                ShowPopup("Refuel Complete", $"Ship {ship.symbol} successfully refueled!", Color.green);
+                                var newShips = await APIService.Instance.GetShips();
+                                _playerShips = newShips.data.ToList();
+                                UpdateActiveTimersFromShips(_playerShips);
+                                SelectWaypoint(wp, null, false);
+                            }
+                            catch (Exception ex)
+                            {
+                                ShowPopup("Refuel Failed", $"Failed to refuel:\n{ex.Message}", Color.red);
+                            }
+                        }) { text = "REFUEL" };
+                        refBtn.AddToClassList("button");
+                        refBtn.AddToClassList("btn-small");
+                        refBtn.AddToClassList("btn-orange");
+                        refBtn.style.width = 65; refBtn.style.height = 18; refBtn.style.fontSize = 8;
+                        refBtn.SetEnabled(!isInTransit);
+                        localRow.Add(refBtn);
+                    }
+
+                    row.Add(localRow);
+                }
+
                 _extraContentContainer.Add(row);
             }
         }

@@ -136,6 +136,31 @@ namespace SpaceTraders.API
             }
         }
 
+        public async Task<T> PostRequest<T>(string endpoint)
+        {
+            Debug.Log($"[SpaceTradersClient] POST {endpoint} (Empty)");
+            using (UnityWebRequest webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST"))
+            {
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                SetHeaders(webRequest);
+                var operation = webRequest.SendWebRequest();
+
+                while (!operation.isDone) await Task.Yield();
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log($"[SpaceTradersClient] Success: {endpoint} ({webRequest.downloadHandler.text.Length} bytes)");
+                    return JsonUtility.FromJson<T>(webRequest.downloadHandler.text);
+                }
+                else
+                {
+                    string err = $"Error {webRequest.responseCode}: {webRequest.error}";
+                    Debug.LogError($"[SpaceTradersClient] Request failed: {endpoint}\n{err}\n{webRequest.downloadHandler.text}");
+                    throw new Exception(err);
+                }
+            }
+        }
+
         private void SetHeaders(UnityWebRequest webRequest)
         {
             if (string.IsNullOrEmpty(_token))

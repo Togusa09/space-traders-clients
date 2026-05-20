@@ -195,3 +195,110 @@
     scale: 1.5;
 }
 
+/* Core Gameplay Action UI Styles */
+.ship-details-container {
+    margin-top: 5px;
+    padding: 8px;
+    background-color: rgb(30, 30, 30);
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: rgb(50, 50, 50);
+}
+
+.action-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.btn-small {
+    height: 25px;
+    font-size: 10px;
+    margin: 2px;
+    padding: 0 10px;
+    border-radius: 3px;
+    -unity-font-style: bold;
+    color: white;
+}
+
+.btn-blue {
+    background-color: rgb(0, 100, 180);
+    border-color: rgb(0, 150, 255);
+}
+.btn-blue:hover {
+    background-color: rgb(0, 120, 220);
+}
+
+.btn-green {
+    background-color: rgb(40, 120, 40);
+    border-color: rgb(60, 180, 60);
+}
+.btn-green:hover {
+    background-color: rgb(50, 150, 50);
+}
+
+.btn-red {
+    background-color: rgb(150, 40, 40);
+    border-color: rgb(200, 50, 50);
+}
+.btn-red:hover {
+    background-color: rgb(180, 50, 50);
+}
+
+.btn-orange {
+    background-color: rgb(180, 100, 0);
+    border-color: rgb(220, 120, 0);
+}
+.btn-orange:hover {
+    background-color: rgb(210, 120, 0);
+}
+
+.inventory-header {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(160, 160, 160);
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.inventory-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background-color: rgb(35, 35, 35);
+    border-radius: 3px;
+    margin-bottom: 2px;
+}
+
+.timer-container {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgb(20, 20, 20);
+    border-radius: 4px;
+    padding: 3px 6px;
+    margin-top: 5px;
+}
+
+.timer-bar-bg {
+    flex-grow: 1;
+    height: 6px;
+    background-color: rgb(40, 40, 40);
+    border-radius: 3px;
+    margin-left: 8px;
+    overflow: hidden;
+}
+
+.timer-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: rgb(0, 150, 255);
+    border-radius: 3px;
+}
+
+.timer-bar-fill--cooldown {
+    background-color: rgb(255, 128, 0);
+}
+

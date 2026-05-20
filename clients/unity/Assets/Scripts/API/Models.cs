@@ -139,11 +139,30 @@ namespace SpaceTraders.API.Models
     }
 
     [Serializable]
+    public class ShipNavRouteWaypoint
+    {
+        public string symbol;
+        public string type;
+        public string systemSymbol;
+        public int x;
+        public int y;
+    }
+
+    [Serializable]
+    public class ShipNavRoute
+    {
+        public ShipNavRouteWaypoint destination;
+        public ShipNavRouteWaypoint origin;
+        public string departureTime;
+        public string arrivalTime;
+    }
+
+    [Serializable]
     public class ShipNav
     {
         public string systemSymbol;
         public string waypointSymbol;
-        public string route;
+        public ShipNavRoute route;
         public string status;
         public string flightMode;
     }
@@ -219,6 +238,21 @@ namespace SpaceTraders.API.Models
     }
 
     [Serializable]
+    public class WaypointTrait
+    {
+        public string symbol;
+        public string name;
+        public string description;
+    }
+
+    [Serializable]
+    public class SystemWaypointsResponse
+    {
+        public SystemWaypoint[] data;
+        public Meta meta;
+    }
+
+    [Serializable]
     public class SystemWaypoint
     {
         public string symbol;
@@ -227,6 +261,7 @@ namespace SpaceTraders.API.Models
         public int y;
         public string orbits;
         public WaypointOrbital[] orbitals;
+        public WaypointTrait[] traits;
     }
 
     [Serializable]
@@ -353,5 +388,183 @@ namespace SpaceTraders.API.Models
     public class ConstructionResponse
     {
         public Construction data;
+    }
+
+    // --- Action & Transaction Models ---
+
+    [Serializable]
+    public class AcceptContractResult
+    {
+        public Agent agent;
+        public Contract contract;
+    }
+
+    [Serializable]
+    public class AcceptContractResponse
+    {
+        public AcceptContractResult data;
+    }
+
+    [Serializable]
+    public class PurchaseShipRequest
+    {
+        public string shipType;
+        public string waypointSymbol;
+    }
+
+    [Serializable]
+    public class PurchaseShipResult
+    {
+        public Agent agent;
+        public Ship ship;
+        public ShipyardTransaction transaction;
+    }
+
+    [Serializable]
+    public class PurchaseShipResponse
+    {
+        public PurchaseShipResult data;
+    }
+
+    [Serializable]
+    public class ShipNavResult
+    {
+        public ShipNav nav;
+    }
+
+    [Serializable]
+    public class ShipNavResponse
+    {
+        public ShipNavResult data;
+    }
+
+    [Serializable]
+    public class NavigateRequest
+    {
+        public string waypointSymbol;
+    }
+
+    [Serializable]
+    public class NavigateResult
+    {
+        public ShipFuel fuel;
+        public ShipNav nav;
+    }
+
+    [Serializable]
+    public class NavigateResponse
+    {
+        public NavigateResult data;
+    }
+
+    [Serializable]
+    public class Cooldown
+    {
+        public string shipSymbol;
+        public int totalSeconds;
+        public string expiration;
+    }
+
+    [Serializable]
+    public class ExtractionYield
+    {
+        public string symbol;
+        public int units;
+    }
+
+    [Serializable]
+    public class Extraction
+    {
+        public string shipSymbol;
+        public ExtractionYield @yield;
+    }
+
+    [Serializable]
+    public class ExtractionResult
+    {
+        public Cooldown cooldown;
+        public Extraction extraction;
+        public ShipCargo cargo;
+    }
+
+    [Serializable]
+    public class ExtractionResponse
+    {
+        public ExtractionResult data;
+    }
+
+    [Serializable]
+    public class SellCargoRequest
+    {
+        public string symbol;
+        public int units;
+    }
+
+    [Serializable]
+    public class SellCargoResult
+    {
+        public Agent agent;
+        public ShipCargo cargo;
+        public MarketTransaction transaction;
+    }
+
+    [Serializable]
+    public class SellCargoResponse
+    {
+        public SellCargoResult data;
+    }
+
+    [Serializable]
+    public class RefuelRequest
+    {
+        public int units;
+    }
+
+    [Serializable]
+    public class RefuelResult
+    {
+        public Agent agent;
+        public ShipFuel fuel;
+        public MarketTransaction transaction;
+    }
+
+    [Serializable]
+    public class RefuelResponse
+    {
+        public RefuelResult data;
+    }
+
+    [Serializable]
+    public class DeliverContractRequest
+    {
+        public string shipSymbol;
+        public string tradeSymbol;
+        public int units;
+    }
+
+    [Serializable]
+    public class DeliverContractResult
+    {
+        public Contract contract;
+        public ShipCargo cargo;
+    }
+
+    [Serializable]
+    public class DeliverContractResponse
+    {
+        public DeliverContractResult data;
+    }
+
+    [Serializable]
+    public class FulfillContractResult
+    {
+        public Agent agent;
+        public Contract contract;
+    }
+
+    [Serializable]
+    public class FulfillContractResponse
+    {
+        public FulfillContractResult data;
     }
 }
