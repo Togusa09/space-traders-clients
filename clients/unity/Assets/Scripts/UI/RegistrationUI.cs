@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using SpaceTraders.API;
 using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
@@ -22,40 +23,52 @@ namespace SpaceTraders.UI
             _gameManager = gameManager;
         }
 
-        private void OnEnable()
+        private void Start()
         {
-            var root = GetComponent<UIDocument>().rootVisualElement;
+            InitializeUI();
+        }
+
+        private void InitializeUI()
+        {
+            var uiDocument = GetComponent<UIDocument>();
+            if (uiDocument == null) return;
+
+            var root = uiDocument.rootVisualElement;
+            if (root == null) return;
+
             _symbolInput = root.Q<TextField>("SymbolInput");
             _factionInput = root.Q<TextField>("FactionInput");
             _registerButton = root.Q<Button>("RegisterButton");
             _statusLabel = root.Q<Label>("StatusLabel");
 
-            _registerButton.clicked += OnRegisterClicked;
+            if (_registerButton != null) _registerButton.clicked += OnRegisterClicked;
         }
 
         private async void OnRegisterClicked()
         {
+            if (_apiService == null || _gameManager == null) return;
+
             string symbol = _symbolInput.value;
             string faction = _factionInput.value;
 
             if (string.IsNullOrEmpty(symbol) || string.IsNullOrEmpty(faction))
             {
-                _statusLabel.text = "Symbol and Faction are required.";
+                if (_statusLabel != null) _statusLabel.text = "Symbol and Faction are required.";
                 return;
             }
 
             _registerButton.SetEnabled(false);
-            _statusLabel.text = "Registering...";
+            if (_statusLabel != null) _statusLabel.text = "Registering...";
 
             try
             {
                 var response = await _apiService.Register(symbol, faction);
-                _statusLabel.text = "Registration successful!";
+                if (_statusLabel != null) _statusLabel.text = "Registration successful!";
                 _gameManager.OnRegistrationSuccess(response.data.token);
             }
             catch (System.Exception ex)
             {
-                _statusLabel.text = $"Error: {ex.Message}";
+                if (_statusLabel != null) _statusLabel.text = $"Error: {ex.Message}";
                 _registerButton.SetEnabled(true);
             }
         }

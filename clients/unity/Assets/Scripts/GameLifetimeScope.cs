@@ -2,31 +2,27 @@ using VContainer;
 using VContainer.Unity;
 using SpaceTraders.API;
 using SpaceTraders.Core;
-using SpaceTraders.UI;
 using UnityEngine;
 
 namespace SpaceTraders
 {
+    /// <summary>
+    /// This is the Project Root LifetimeScope.
+    /// It should be assigned in VContainerSettings (Assets -> Create -> VContainer -> VContainer Settings).
+    /// All registrations here are global and persist across scene changes.
+    /// </summary>
     public class GameLifetimeScope : LifetimeScope
     {
         protected override void Configure(IContainerBuilder builder)
         {
-            // Register Managers/Services as Singletons in the Root Scope
+            // Register Managers/Services as Singletons in the Project Root.
+            // These should be attached to the GameLifetimeScope prefab or its children.
             builder.RegisterComponentInHierarchy<DatabaseManager>();
             builder.RegisterComponentInHierarchy<AuthManager>();
             builder.RegisterComponentInHierarchy<SpaceTradersClient>();
             builder.RegisterComponentInHierarchy<APIService>();
             builder.RegisterComponentInHierarchy<UniverseSyncManager>();
             builder.RegisterComponentInHierarchy<GameManager>();
-
-            // Register UI Controllers/Presenters to enable Injection
-            builder.RegisterComponentInHierarchy<MenuManager>();
-            builder.RegisterComponentInHierarchy<RegistrationUI>();
-            builder.RegisterComponentInHierarchy<SettingsUI>();
-            builder.RegisterComponentInHierarchy<DashboardController>();
-            builder.RegisterComponentInHierarchy<MapPresenter>();
-            builder.RegisterComponentInHierarchy<FleetPresenter>();
-            builder.RegisterComponentInHierarchy<ContractPresenter>();
         }
     }
 }

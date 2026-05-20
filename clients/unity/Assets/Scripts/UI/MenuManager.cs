@@ -19,9 +19,25 @@ namespace SpaceTraders.UI
         public void Construct(AuthManager authManager)
         {
             _authManager = authManager;
+            Log.Info("[MenuManager] AuthManager injected successfully.");
         }
 
-        private void OnEnable()
+        private void Start()
+        {
+            InitializeUI();
+            
+            if (_authManager != null)
+            {
+                _authManager.LoadTokens();
+                UpdateUI();
+            }
+            else
+            {
+                Log.Warning("[MenuManager] AuthManager is null in Start(). Injection might have failed.");
+            }
+        }
+
+        private void InitializeUI()
         {
             var uiDocument = GetComponent<UIDocument>();
             if (uiDocument == null)
@@ -44,16 +60,6 @@ namespace SpaceTraders.UI
             if (_playButton != null) _playButton.clicked += OnPlayClicked;
             if (_settingsButton != null) _settingsButton.clicked += OnSettingsClicked;
             if (_quitButton != null) _quitButton.clicked += OnQuitClicked;
-
-            if (_authManager != null)
-            {
-                _authManager.LoadTokens();
-                UpdateUI();
-            }
-            else
-            {
-                Log.Warning("[MenuManager] AuthManager not injected. Dependency Injection might not be configured correctly in this scene.");
-            }
         }
 
         private void UpdateUI()

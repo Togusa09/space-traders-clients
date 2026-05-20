@@ -37,9 +37,19 @@ namespace SpaceTraders.UI
             _apiService = apiService;
         }
 
-        private void OnEnable()
+        private void Start()
         {
-            _root = GetComponent<UIDocument>().rootVisualElement;
+            InitializeUI();
+            RefreshData();
+        }
+
+        private void InitializeUI()
+        {
+            var uiDocument = GetComponent<UIDocument>();
+            if (uiDocument == null) return;
+            
+            _root = uiDocument.rootVisualElement;
+            if (_root == null) return;
 
             // Bind Header
             _agentNameLabel = _root.Q<Label>("AgentName");
@@ -48,11 +58,17 @@ namespace SpaceTraders.UI
             _hqLabel = _root.Q<Label>("HQValue");
 
             // Bind Sidebar Buttons
-            _root.Q<Button>("BtnFactions").clicked += () => ShowPanel(_panelFactions);
-            _root.Q<Button>("BtnContracts").clicked += () => ShowPanel(_panelContracts);
-            _root.Q<Button>("BtnFleet").clicked += () => ShowPanel(_panelFleet);
-            _root.Q<Button>("BtnSystems").clicked += () => ShowPanel(_panelSystems);
-            _root.Q<Button>("BtnRefresh").clicked += RefreshData;
+            var btnFactions = _root.Q<Button>("BtnFactions");
+            var btnContracts = _root.Q<Button>("BtnContracts");
+            var btnFleet = _root.Q<Button>("BtnFleet");
+            var btnSystems = _root.Q<Button>("BtnSystems");
+            var btnRefresh = _root.Q<Button>("BtnRefresh");
+
+            if (btnFactions != null) btnFactions.clicked += () => ShowPanel(_panelFactions);
+            if (btnContracts != null) btnContracts.clicked += () => ShowPanel(_panelContracts);
+            if (btnFleet != null) btnFleet.clicked += () => ShowPanel(_panelFleet);
+            if (btnSystems != null) btnSystems.clicked += () => ShowPanel(_panelSystems);
+            if (btnRefresh != null) btnRefresh.clicked += RefreshData;
 
             // Panels
             _panelFactions = _root.Q<VisualElement>("PanelFactions");
@@ -62,8 +78,6 @@ namespace SpaceTraders.UI
 
             // Default view
             ShowPanel(_panelFleet);
-            
-            RefreshData();
         }
 
         private void ShowPanel(VisualElement panel)
@@ -75,7 +89,7 @@ namespace SpaceTraders.UI
 
         private async void RefreshData()
         {
-            if (!_authManager.HasAgentToken) return;
+            if (_authManager == null || !_authManager.HasAgentToken || _client == null || _apiService == null) return;
 
             _client.SetToken(_authManager.AgentToken);
 
@@ -88,13 +102,13 @@ namespace SpaceTraders.UI
 
                 await Task.WhenAll(agentTask, contractTask, shipTask);
 
-                UpdateHeader(agentTask.Result.data);
-                UpdateContracts(contractTask.Result.data);
-                UpdateFleet(shipTask.Result.data);
+                if (agentTask.Result != null) UpdateHeader(agentTask.Result.data);
+                if (contractTask.Result != null) UpdateContracts(contractTask.Result.data);
+                if (shipTask.Result != null) UpdateFleet(shipTask.Result.data);
 
                 // Factions are static-ish, fetch once if needed
                 var factions = await _apiService.GetFactions();
-                UpdateFactions(factions.data);
+                if (factions != null) UpdateFactions(factions.data);
             }
             catch (System.Exception e)
             {
@@ -104,15 +118,18 @@ namespace SpaceTraders.UI
 
         private void UpdateHeader(Agent agent)
         {
-            _agentNameLabel.text = agent.symbol;
-            _creditsLabel.text = agent.credits.ToString("N0");
-            _factionLabel.text = agent.startingFaction;
-            _hqLabel.text = agent.headquarters;
+            if (_agentNameLabel != null) _agentNameLabel.text = agent.symbol;
+            if (_creditsLabel != null) _creditsLabel.text = agent.credits.ToString("N0");
+            if (_factionLabel != null) _factionLabel.text = agent.startingFaction;
+            if (_hqLabel != null) _hqLabel.text = agent.headquarters;
         }
 
         private void UpdateFactions(Faction[] factions)
         {
+            if (_panelFactions == null) return;
             var list = _panelFactions.Q<ScrollView>("FactionList");
+            if (list == null) return;
+
             list.Clear();
             foreach (var f in factions)
             {
@@ -123,7 +140,10 @@ namespace SpaceTraders.UI
 
         private void UpdateContracts(Contract[] contracts)
         {
+            if (_panelContracts == null) return;
             var list = _panelContracts.Q<ScrollView>("ContractList");
+            if (list == null) return;
+
             list.Clear();
             var presenter = GetComponent<ContractPresenter>();
             if (presenter != null) presenter.Populate(list, contracts);
@@ -131,7 +151,10 @@ namespace SpaceTraders.UI
 
         private void UpdateFleet(Ship[] ships)
         {
+            if (_panelFleet == null) return;
             var list = _panelFleet.Q<ScrollView>("ShipList");
+            if (list == null) return;
+
             list.Clear();
             var presenter = GetComponent<FleetPresenter>();
             if (presenter != null) presenter.Populate(list, ships);
@@ -151,32 +174,32 @@ namespace SpaceTraders.UI
 
         private async Task PollStatusUpdates()
         {
+            if (_apiService == null) return;
+
             if (_currentPanel == _panelFleet)
             {
                 var ships = await _apiService.GetShips();
-                UpdateFleet(ships.data);
+                if (ships != null) UpdateFleet(ships.data);
             }
             else if (_currentPanel == _panelContracts)
             {
-                // In a real app, maybe only refresh if we know something changed
-                // but for dashboard keeping it simple:
                 try
                 {
                     var agent = await _apiService.GetMyAgent();
-                    UpdateHeader(agent.data);
+                    if (agent != null) UpdateHeader(agent.data);
 
                     var contracts = await _apiService.GetContracts();
-                    UpdateContracts(contracts.data);
+                    if (contracts != null) UpdateContracts(contracts.data);
 
                     var ships = await _apiService.GetShips();
-                    UpdateFleet(ships.data);
+                    if (ships != null) UpdateFleet(ships.data);
                 }
                 catch { /* silence background poll errors */ }
             }
             else if (_currentPanel == _panelFactions)
             {
                 var factions = await _apiService.GetFactions();
-                UpdateFactions(factions.data);
+                if (factions != null) UpdateFactions(factions.data);
             }
         }
     }

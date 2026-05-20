@@ -40,9 +40,23 @@ namespace SpaceTraders.UI
             _syncManager = syncManager;
         }
 
-        private void OnEnable()
+        private void Start()
         {
-            var root = GetComponent<UIDocument>().rootVisualElement;
+            InitializeUI();
+            
+            if (_authManager != null)
+            {
+                _agentTokenInput.value = _authManager.AgentToken;
+            }
+        }
+
+        private void InitializeUI()
+        {
+            var uiDocument = GetComponent<UIDocument>();
+            if (uiDocument == null) return;
+            
+            var root = uiDocument.rootVisualElement;
+            if (root == null) return;
 
             _agentTokenInput = root.Q<TextField>("AgentTokenInput");
             _saveButton = root.Q<Button>("SaveButton");
@@ -53,13 +67,11 @@ namespace SpaceTraders.UI
             _syncStatusLabel = root.Q<Label>("SyncStatusLabel");
             _dbStatusLabel = root.Q<Label>("DatabaseStatusLabel");
 
-            _saveButton.clicked += OnSaveClicked;
-            _backButton.clicked += () => SceneManager.LoadScene("MainMenu");
-            _startSyncButton.clicked += OnStartSyncClicked;
-            _stopSyncButton.clicked += OnStopSyncClicked;
-            _clearCacheButton.clicked += OnClearCacheClicked;
-
-            _agentTokenInput.value = _authManager.AgentToken;
+            if (_saveButton != null) _saveButton.clicked += OnSaveClicked;
+            if (_backButton != null) _backButton.clicked += () => SceneManager.LoadScene("MainMenu");
+            if (_startSyncButton != null) _startSyncButton.clicked += OnStartSyncClicked;
+            if (_stopSyncButton != null) _stopSyncButton.clicked += OnStopSyncClicked;
+            if (_clearCacheButton != null) _clearCacheButton.clicked += OnClearCacheClicked;
         }
 
         private void Update()
@@ -69,7 +81,7 @@ namespace SpaceTraders.UI
 
         private void UpdateStatus()
         {
-            if (_syncStatusLabel == null) return;
+            if (_syncStatusLabel == null || _syncManager == null || _dbManager == null) return;
 
             var sync = _syncManager;
             var db = _dbManager;
@@ -77,29 +89,31 @@ namespace SpaceTraders.UI
             if (sync.IsSyncing)
             {
                 _syncStatusLabel.text = $"Syncing: {sync.Progress:P0} (Page {sync.CurrentPage}/{sync.TotalPages})";
-                _startSyncButton.SetEnabled(false);
-                _stopSyncButton.SetEnabled(true);
+                if (_startSyncButton != null) _startSyncButton.SetEnabled(false);
+                if (_stopSyncButton != null) _stopSyncButton.SetEnabled(true);
             }
             else
             {
                 _syncStatusLabel.text = "Sync Idle";
-                _startSyncButton.SetEnabled(true);
-                _stopSyncButton.SetEnabled(false);
+                if (_startSyncButton != null) _startSyncButton.SetEnabled(true);
+                if (_stopSyncButton != null) _stopSyncButton.SetEnabled(false);
             }
 
             _dbStatusLabel.text = $"Indexed Systems: {db.GetIndexedSystemCount()}";
         }
 
-        private void OnStartSyncClicked() => _syncManager.StartSync();
-        private void OnStopSyncClicked() => _syncManager.StopSync();
+        private void OnStartSyncClicked() => _syncManager?.StartSync();
+        private void OnStopSyncClicked() => _syncManager?.StopSync();
         private void OnClearCacheClicked()
         {
-            _dbManager.ClearCache();
+            _dbManager?.ClearCache();
             UpdateStatus();
         }
 
         private async void OnSaveClicked()
         {
+            if (_authManager == null || _client == null || _apiService == null) return;
+
             _saveButton.SetEnabled(false);
             try
             {

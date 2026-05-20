@@ -2,50 +2,59 @@
 
 This guide explains how to properly set up your Unity scenes to work with the new Dependency Injection (VContainer) and Structured Logging systems.
 
-## 1. The Global Lifetime Scope
-The project uses **VContainer** for dependency injection. All core managers are registered in a `GameLifetimeScope`.
+## 1. The Project Root Lifetime Scope
+The project uses **VContainer** for application-wide dependencies (Managers and Services).
 
 ### Setup:
-1.  Create a new scene called `Initialization` (or use your first scene, e.g., `Registration`).
-2.  Create an empty GameObject named **`GameLifetimeScope`**.
-3.  Attach the **`GameLifetimeScope`** script to it.
-4.  In the Inspector, set the **`Is Root`** checkbox to **True**. This makes these dependencies available across all scenes.
-5.  Create empty GameObjects for the following managers and attach their respective scripts:
-    *   `DatabaseManager`
-    *   `AuthManager`
-    *   `SpaceTradersClient`
-    *   `APIService`
-    *   `UniverseSyncManager`
-    *   `GameManager`
-6.  (Optional) Nest these manager GameObjects under the `GameLifetimeScope` GameObject for organization.
+1.  **Create the Prefab:**
+    *   Create an empty GameObject in a new scene.
+    *   Attach the **`GameLifetimeScope`** script to it.
+    *   Create child GameObjects for the following and attach their scripts:
+        *   `DatabaseManager`
+        *   `AuthManager`
+        *   `SpaceTradersClient`
+        *   `APIService`
+        *   `UniverseSyncManager`
+        *   `GameManager`
+    *   Drag this GameObject into your project folder to create a **Prefab**.
+2.  **Configure VContainer Settings:**
+    *   Go to `Assets -> Create -> VContainer -> VContainer Settings`.
+    *   In the **`VContainer Settings`** asset, find the **`Root Lifetime Scope`** field.
+    *   Assign your **`GameLifetimeScope`** prefab to this field.
+    *   *Note:* VContainer will now automatically instantiate this prefab at startup and make it a parent to all other scopes.
 
-## 2. Wiring UI Components
-VContainer needs to be told which components in your scene require injection.
+## 2. Scene-Specific Lifetime Scopes
+Each scene that contains UI or scene-specific logic needs its own **`LifetimeScope`** to handle injection for those objects.
 
-### Option A: Register in Hierarchy (Recommended for singletons)
-For components that exist once in a scene:
-1.  In `GameLifetimeScope.cs`, add `builder.RegisterComponentInHierarchy<YourComponent>();`.
-
-### Option B: Auto-Inject GameObjects
-If you have many UI components or don't want to register every script:
-1.  Select your **`GameLifetimeScope`** GameObject.
-2.  Find the **`Auto Inject Game Objects`** list in the Inspector.
-3.  Add the GameObjects containing your UI scripts (e.g., `MenuManager`, `SettingsUI`) to this list.
+### Setup for MainMenu, Settings, etc.:
+1.  In your scene (e.g., `MainMenu`), create an empty GameObject named **`MainMenuLifetimeScope`**.
+2.  Attach a new script that inherits from `LifetimeScope` (or use the generic `LifetimeScope` component if only using Auto-Inject).
+3.  **To Inject into UI MonoBehaviours:**
+    *   **Option A (Recommended):** Add your UI GameObjects (like the one with `MenuManager`) to the **`Auto Inject Game Objects`** list in the `LifetimeScope` Inspector.
+    *   **Option B (Code-based):** Create a custom script for the scope and register the component:
+        ```csharp
+        protected override void Configure(IContainerBuilder builder) {
+            builder.RegisterComponentInHierarchy<MenuManager>();
+        }
+        ```
 
 ## 3. UI Toolkit Setup
 For all UI scenes (`MainMenu`, `Settings`, `Registration`, `Dashboard`):
 1.  Ensure there is a GameObject with a **`UIDocument`** component.
 2.  Assign the correct `.uxml` file to the `Visual Tree Asset` field.
-3.  Attach the corresponding script (e.g., `MenuManager`) to the **same** GameObject as the `UIDocument`.
-4.  Ensure the GameObject is included in the `Auto Inject Game Objects` list of the `LifetimeScope` (if not using `RegisterComponentInHierarchy`).
+3.  Attach the corresponding script (e.g., `MenuManager`) to a GameObject.
+4.  **Crucial:** Ensure that GameObject is registered for injection in the scene's `LifetimeScope` (see Step 2).
 
-## 4. Troubleshooting
+## 4. Initialization Scene
+It is recommended to have a dedicated **Initialization** scene that is loaded first. This scene can be empty, as the **Project Root Lifetime Scope** will be created automatically before any scene loads if configured in `VContainerSettings`.
 
-### NullReferenceException in OnEnable
-If you see a crash in `OnEnable`, it usually means:
-*   The `UIDocument` is missing from the GameObject.
-*   The `Visual Tree Asset` (.uxml) doesn't contain the expected element names (e.g., "PlayButton").
-*   **VContainer hasn't injected the dependencies yet.** Ensure the GameObject is registered for injection (see Step 2).
+## 5. Troubleshooting
+
+### NullReferenceException / "AuthManager not injected"
+If a dependency is null:
+*   Verify the `GameLifetimeScope` prefab is assigned in `VContainerSettings`.
+*   Verify the manager (e.g., `AuthManager`) is a child of the `GameLifetimeScope` prefab.
+*   Verify the scene has its own `LifetimeScope` and the script (e.g., `MenuManager`) is in the `Auto Inject Game Objects` list.
 
 ### AES Key Size Error
-If you see "Specified key is not a valid size", ensure `SecureTokenStorage.cs` uses a 32-byte string for the AES-256 key. (This has been fixed in the latest code updates).
+Fixed. Ensure `SecureTokenStorage.cs` uses a 32-byte string for the AES-256 key.
