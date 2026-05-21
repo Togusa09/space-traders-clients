@@ -22,6 +22,7 @@ namespace SpaceTraders.UI
         [Header("UI References")]
         private VisualElement _systemList;
         private VisualElement _mapContainer;
+        private VisualElement _waypointsLayer;
         private TextField _searchField;
         private Label _selectedSystemLabel;
         private VisualElement _systemDetailPanel;
@@ -59,6 +60,7 @@ namespace SpaceTraders.UI
             // Bind references from the instantiated panel
             _systemList = panel.Q<VisualElement>("system-list");
             _mapContainer = panel.Q<VisualElement>("map-container");
+            _waypointsLayer = panel.Q<VisualElement>("waypoints-layer");
             _searchField = panel.Q<TextField>("system-search");
             _selectedSystemLabel = panel.Q<Label>("selected-system-title");
             _systemDetailPanel = panel.Q<VisualElement>("waypoint-details");
@@ -159,20 +161,21 @@ namespace SpaceTraders.UI
 
         private void UpdateMap(SpaceTraders.Generated.Model.System system)
         {
-            if (_mapContainer == null) return;
+            var targetLayer = _waypointsLayer ?? _mapContainer;
+            if (targetLayer == null) return;
             
             // Check if layout is ready
-            if (float.IsNaN(_mapContainer.layout.width) || _mapContainer.layout.width <= 0)
+            if (float.IsNaN(targetLayer.layout.width) || targetLayer.layout.width <= 0)
             {
-                Log.Warning("[Map] Map container layout not ready. Rendering deferred.");
+                Log.Warning("[Map] Map layout not ready. Rendering deferred.");
                 return;
             }
 
-            _mapContainer.Clear();
+            targetLayer.Clear();
             
             float scale = 5f;
-            float centerX = _mapContainer.layout.width / 2;
-            float centerY = _mapContainer.layout.height / 2;
+            float centerX = targetLayer.layout.width / 2;
+            float centerY = targetLayer.layout.height / 2;
 
             Log.Info("[Map] Rendering {Count} waypoints for {System}", system.Waypoints.Count, system.Symbol);
 
@@ -193,7 +196,7 @@ namespace SpaceTraders.UI
                     icon.RegisterCallback<MouseLeaveEvent>(evt => tooltip.style.display = DisplayStyle.None);
                 }
 
-                _mapContainer.Add(icon);
+                targetLayer.Add(icon);
             }
         }
 
