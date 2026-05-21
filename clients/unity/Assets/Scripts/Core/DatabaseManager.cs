@@ -229,12 +229,12 @@ namespace SpaceTraders.Core
                 {
                     foreach (var (wp, sys) in waypoints)
                     {
-                        db.InsertOrIgnore(new IndexedJumpGate
+                        db.Insert(new IndexedJumpGate
                         {
                             WaypointSymbol = wp,
                             SystemSymbol = sys,
                             ConnectionsJson = null
-                        });
+                        }, "OR IGNORE");
                     }
                 });
             }

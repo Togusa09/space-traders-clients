@@ -51,6 +51,8 @@ namespace SpaceTraders.UI
         private List<DatabaseManager.IndexedSystem> _allGalaxySystems;
         private List<DatabaseManager.IndexedSystem> _filteredSystems;
         private List<DatabaseManager.IndexedSystem> _pagedSystems;
+        private List<(string FromSystem, string ToSystem)> _jumpGateSystemLinks = new List<(string, string)>();
+        private Dictionary<string, DatabaseManager.IndexedSystem> _galaxySystemLookup = new Dictionary<string, DatabaseManager.IndexedSystem>();
         private readonly List<VisualElement> _listEntries = new List<VisualElement>();
 
         private DatabaseManager _dbManager;
@@ -156,6 +158,8 @@ namespace SpaceTraders.UI
             if (_dbManager != null)
             {
                 _allGalaxySystems = _dbManager.GetAllSystems();
+                RebuildGalaxyLookup();
+                LoadJumpGateConnections();
             }
 
             ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
@@ -300,6 +304,8 @@ namespace SpaceTraders.UI
                 {
                     _allGalaxySystems = loadedSystems;
                     _dbManager?.StoreSystems(loadedSystems);
+                    RebuildGalaxyLookup();
+                    LoadJumpGateConnections();
                     ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
                     if (_mapMode == MapMode.Galaxy)
                     {
@@ -1021,6 +1027,7 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
+                DrawJumpGatePaths(painter, rect);
                 DrawGalaxyBulk(painter, rect);
             }
             else
@@ -1083,6 +1090,79 @@ namespace SpaceTraders.UI
                 painter.Arc(center, radius, 0f, 360f);
                 painter.Stroke();
             }
+        }
+
+        private void RebuildGalaxyLookup()
+        {
+            _galaxySystemLookup = (_allGalaxySystems ?? new List<DatabaseManager.IndexedSystem>())
+                .ToDictionary(s => s.Symbol, s => s);
+        }
+
+        private void LoadJumpGateConnections()
+        {
+            _jumpGateSystemLinks = new List<(string, string)>();
+            if (_dbManager == null) return;
+
+            var gates = _dbManager.GetAllJumpGateConnections();
+            var seen = new HashSet<string>();
+
+            foreach (var gate in gates)
+            {
+                if (string.IsNullOrEmpty(gate.ConnectionsJson)) continue;
+
+                var connectedWaypoints = gate.ConnectionsJson.Split(
+                    new[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var connectedWp in connectedWaypoints)
+                {
+                    string toSystem = ParseSystemSymbol(connectedWp.Trim());
+                    if (string.IsNullOrEmpty(toSystem) || toSystem == gate.SystemSymbol) continue;
+
+                    // Canonical key ensures A→B and B→A are treated as the same edge.
+                    string key = string.Compare(gate.SystemSymbol, toSystem, System.StringComparison.Ordinal) < 0
+                        ? $"{gate.SystemSymbol}|{toSystem}"
+                        : $"{toSystem}|{gate.SystemSymbol}";
+
+                    if (seen.Add(key))
+                    {
+                        _jumpGateSystemLinks.Add((gate.SystemSymbol, toSystem));
+                    }
+                }
+            }
+        }
+
+        private static string ParseSystemSymbol(string waypointSymbol)
+        {
+            if (string.IsNullOrEmpty(waypointSymbol)) return string.Empty;
+            var parts = waypointSymbol.Split('-');
+            if (parts.Length < 2) return string.Empty;
+            return string.Join("-", parts, 0, parts.Length - 1);
+        }
+
+        private void DrawJumpGatePaths(Painter2D painter, Rect rect)
+        {
+            if (_jumpGateSystemLinks == null || _jumpGateSystemLinks.Count == 0) return;
+
+            painter.strokeColor = new Color(0.4f, 0.7f, 1f, 0.15f);
+            painter.lineWidth = 1f;
+            painter.BeginPath();
+
+            foreach (var (fromSys, toSys) in _jumpGateSystemLinks)
+            {
+                if (!_galaxySystemLookup.TryGetValue(fromSys, out var from)) continue;
+                if (!_galaxySystemLookup.TryGetValue(toSys, out var to)) continue;
+
+                Vector2 a = new Vector2(from.X * GalaxyScale, from.Y * GalaxyScale) * MapZoom + MapOffset;
+                Vector2 b = new Vector2(to.X * GalaxyScale, to.Y * GalaxyScale) * MapZoom + MapOffset;
+
+                // Viewport cull: skip if both endpoints are outside the rect.
+                if (!rect.Contains(a) && !rect.Contains(b)) continue;
+
+                painter.MoveTo(a);
+                painter.LineTo(b);
+            }
+
+            painter.Stroke();
         }
 
         private void DrawGalaxyBulk(Painter2D painter, Rect rect)
