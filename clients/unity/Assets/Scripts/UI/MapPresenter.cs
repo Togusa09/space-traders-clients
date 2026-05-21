@@ -20,6 +20,27 @@ namespace SpaceTraders.UI
             System
         }
 
+        private enum IconShape
+        {
+            Circle,
+            Square,
+            Triangle,
+            Diamond,
+            Hexagon
+        }
+
+        private struct IconStyle
+        {
+            public IconShape Shape;
+            public float Radius;
+            public Color FillColor;
+            public Color StrokeColor;
+            public float StrokeWidth;
+            public bool HasCore;
+            public float CoreRadiusFactor;
+            public Color CoreColor;
+        }
+
         [Header("Templates")]
         public VisualTreeAsset systemEntryTemplate;
         public VisualTreeAsset systemPanelTemplate;
@@ -1077,97 +1098,138 @@ namespace SpaceTraders.UI
                 bool selected = waypoint.Symbol == _selectedSymbol;
                 string type = waypoint.Type.ToString();
                 Vector2 pos = WorldToScreen(GetSystemWaypointWorldPosition(waypoint));
-                float radius = selected ? 4.5f : 3.5f;
+                var style = GetWaypointIconStyle(type, selected);
 
-                if (!rect.Overlaps(new Rect(pos.x - radius, pos.y - radius, radius * 2f, radius * 2f)))
+                if (!rect.Overlaps(new Rect(pos.x - style.Radius, pos.y - style.Radius, style.Radius * 2f, style.Radius * 2f)))
                 {
                     continue;
                 }
 
-                Color fillColor = selected ? Color.cyan : GetWaypointColor(type);
-                Color strokeColor = selected ? Color.white : new Color(0.92f, 0.92f, 0.92f, 0.85f);
-                float lineWidth = selected ? 1.5f : 1f;
-
-                DrawWaypointShape(painter, pos, radius, type, fillColor, strokeColor, lineWidth);
+                DrawIcon(painter, pos, style);
             }
         }
 
-        private void DrawWaypointShape(Painter2D painter, Vector2 pos, float radius, string type, Color fillColor, Color strokeColor, float lineWidth)
+        private IconStyle GetWaypointIconStyle(string type, bool selected)
         {
-            if (type == "ORBITAL_STATION")
+            var style = new IconStyle
             {
-                DrawWaypointPolygon(
-                    painter,
-                    new[]
-                    {
-                        new Vector2(pos.x - radius, pos.y - radius),
-                        new Vector2(pos.x + radius, pos.y - radius),
-                        new Vector2(pos.x + radius, pos.y + radius),
-                        new Vector2(pos.x - radius, pos.y + radius)
-                    },
-                    fillColor,
-                    strokeColor,
-                    lineWidth);
-                return;
-            }
+                Shape = IconShape.Circle,
+                Radius = selected ? 4.8f : 3.6f,
+                FillColor = selected ? Color.cyan : GetWaypointColor(type),
+                StrokeColor = selected ? Color.white : new Color(0.92f, 0.92f, 0.92f, 0.85f),
+                StrokeWidth = selected ? 1.6f : 1.0f,
+                HasCore = false,
+                CoreRadiusFactor = 0.4f,
+                CoreColor = new Color(0.06f, 0.06f, 0.1f, 1f)
+            };
 
-            if (type == "ASTEROID_FIELD")
+            style.Shape = type switch
             {
-                DrawWaypointPolygon(
-                    painter,
-                    new[]
-                    {
-                        new Vector2(pos.x, pos.y - radius),
-                        new Vector2(pos.x + radius, pos.y + radius),
-                        new Vector2(pos.x - radius, pos.y + radius)
-                    },
-                    fillColor,
-                    strokeColor,
-                    lineWidth);
-                return;
-            }
+                "ORBITAL_STATION" => IconShape.Square,
+                "ASTEROID_FIELD" => IconShape.Triangle,
+                "JUMP_GATE" => IconShape.Diamond,
+                _ => IconShape.Circle
+            };
 
             if (type == "JUMP_GATE")
             {
-                DrawWaypointPolygon(
-                    painter,
-                    new[]
-                    {
-                        new Vector2(pos.x, pos.y - radius),
-                        new Vector2(pos.x + radius, pos.y),
-                        new Vector2(pos.x, pos.y + radius),
-                        new Vector2(pos.x - radius, pos.y)
-                    },
-                    fillColor,
-                    strokeColor,
-                    lineWidth);
-
-                painter.fillColor = new Color(0.05f, 0.05f, 0.09f, 1f);
-                painter.BeginPath();
-                painter.Arc(pos, Mathf.Max(1f, radius * 0.45f), 0f, 360f);
-                painter.Fill();
-                return;
+                style.HasCore = true;
+                style.CoreRadiusFactor = 0.45f;
             }
 
-            painter.fillColor = fillColor;
-            painter.strokeColor = strokeColor;
-            painter.lineWidth = lineWidth;
+            return style;
+        }
+
+        private IconStyle GetGalaxySystemIconStyle(string type, bool selected)
+        {
+            string key = NormalizeSystemTypeKey(type);
+            var style = new IconStyle
+            {
+                Shape = IconShape.Circle,
+                Radius = selected ? 4.3f : 2.8f,
+                FillColor = selected ? Color.cyan : GetSystemColor(type),
+                StrokeColor = selected ? Color.white : new Color(0.15f, 0.15f, 0.18f, 0.9f),
+                StrokeWidth = selected ? 1.3f : 0.9f,
+                HasCore = false,
+                CoreRadiusFactor = 0.35f,
+                CoreColor = new Color(0.05f, 0.05f, 0.08f, 1f)
+            };
+
+            style.Shape = key switch
+            {
+                "BLUESTAR" => IconShape.Diamond,
+                "NEUTRONSTAR" => IconShape.Hexagon,
+                "ORANGESTAR" => IconShape.Square,
+                "YOUNGSTAR" => IconShape.Triangle,
+                "HYPERGIANT" => IconShape.Square,
+                "NEBULA" => IconShape.Hexagon,
+                _ => IconShape.Circle
+            };
+
+            if (key == "BLACKHOLE" || key == "WHITEDWARF")
+            {
+                style.HasCore = true;
+            }
+
+            if (key == "HYPERGIANT")
+            {
+                style.Radius += selected ? 0.8f : 0.6f;
+            }
+
+            return style;
+        }
+
+        private void DrawIcon(Painter2D painter, Vector2 pos, IconStyle style)
+        {
+            switch (style.Shape)
+            {
+                case IconShape.Circle:
+                    DrawCircleIcon(painter, pos, style);
+                    break;
+                case IconShape.Square:
+                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 4, 45f), style);
+                    break;
+                case IconShape.Triangle:
+                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 3, -90f), style);
+                    break;
+                case IconShape.Diamond:
+                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 4, 0f), style);
+                    break;
+                case IconShape.Hexagon:
+                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 6, -90f), style);
+                    break;
+            }
+
+            if (style.HasCore)
+            {
+                painter.fillColor = style.CoreColor;
+                painter.BeginPath();
+                painter.Arc(pos, Mathf.Max(1f, style.Radius * style.CoreRadiusFactor), 0f, 360f);
+                painter.Fill();
+            }
+        }
+
+        private void DrawCircleIcon(Painter2D painter, Vector2 center, IconStyle style)
+        {
+            painter.fillColor = style.FillColor;
+            painter.strokeColor = style.StrokeColor;
+            painter.lineWidth = style.StrokeWidth;
             painter.BeginPath();
-            painter.Arc(pos, radius, 0f, 360f);
+            painter.Arc(center, style.Radius, 0f, 360f);
             painter.Fill();
             painter.Stroke();
         }
 
-        private void DrawWaypointPolygon(Painter2D painter, IReadOnlyList<Vector2> points, Color fillColor, Color strokeColor, float lineWidth)
+        private void DrawPolygonIcon(Painter2D painter, IReadOnlyList<Vector2> points, IconStyle style)
         {
             if (points == null || points.Count < 3)
             {
                 return;
             }
 
-            painter.fillColor = fillColor;
-            painter.strokeColor = strokeColor;
-            painter.lineWidth = lineWidth;
+            painter.fillColor = style.FillColor;
+            painter.strokeColor = style.StrokeColor;
+            painter.lineWidth = style.StrokeWidth;
 
             painter.BeginPath();
             painter.MoveTo(points[0]);
@@ -1178,6 +1240,22 @@ namespace SpaceTraders.UI
             painter.LineTo(points[0]);
             painter.Fill();
             painter.Stroke();
+        }
+
+        private Vector2[] BuildRegularPolygon(Vector2 center, float radius, int sides, float startAngleDeg)
+        {
+            var points = new Vector2[sides];
+            float step = 360f / sides;
+
+            for (int i = 0; i < sides; i++)
+            {
+                float angle = (startAngleDeg + i * step) * Mathf.Deg2Rad;
+                points[i] = new Vector2(
+                    center.x + Mathf.Cos(angle) * radius,
+                    center.y + Mathf.Sin(angle) * radius);
+            }
+
+            return points;
         }
 
         private void DrawSystemOrbitRings(Painter2D painter, Rect rect)
@@ -1327,10 +1405,7 @@ namespace SpaceTraders.UI
                 }
 
                 bool selected = system.Symbol == selectedGalaxySymbol;
-                painter.fillColor = selected ? Color.cyan : GetSystemColor(system.Type);
-                painter.BeginPath();
-                painter.Arc(pos, selected ? 4f : 2.5f, 0, 360);
-                painter.Fill();
+                DrawIcon(painter, pos, GetGalaxySystemIconStyle(system.Type, selected));
             }
         }
 
