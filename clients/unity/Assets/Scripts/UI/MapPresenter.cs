@@ -500,30 +500,12 @@ namespace SpaceTraders.UI
                 }
             }
 
-            foreach (var listEntry in _listEntries)
-            {
-                listEntry.RemoveFromClassList("selected-entry");
-            }
+            ClearListSelection();
 
             entry ??= _systemList?.Q<VisualElement>($"list-{system.Symbol}");
             entry?.AddToClassList("selected-entry");
 
-            if (_selectedSystemLabel != null)
-            {
-                _selectedSystemLabel.text = $"System: {system.Symbol}";
-            }
-
-            if (_wpSymbolLabel != null) _wpSymbolLabel.text = system.Symbol;
-            if (_wpTypeLabel != null) _wpTypeLabel.text = system.Type;
-            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"{system.X}, {system.Y}";
-            if (_wpDescLabel != null) _wpDescLabel.text = "Selected system. Click SYSTEM to open.";
-
-            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "System Selection";
-            if (_extraContentContainer != null)
-            {
-                _extraContentContainer.Clear();
-                _extraContentContainer.Add(new Label("Use the SYSTEM button to switch to waypoint view."));
-            }
+            ApplyGalaxySystemSelectionDetails(system);
 
             if (_mapMode == MapMode.Galaxy)
             {
@@ -806,52 +788,80 @@ namespace SpaceTraders.UI
         {
             if (waypoint == null) return;
 
-            _selectedSymbol = waypoint.Symbol;
-            _selectedWaypoint = null;
-
-            foreach (var listEntry in _listEntries)
-            {
-                listEntry.RemoveFromClassList("selected-entry");
-            }
-
-            var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
-            selectedListEntry?.AddToClassList("selected-entry");
-
-            if (_mapMode == MapMode.System)
-            {
-                CenterMapOnWorldPosition(GetSystemWaypointWorldPosition(waypoint));
-            }
-
-            ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Waypoint selected.");
-            _ = LoadSpecializedInfo(waypoint.Symbol, waypoint.Type.ToString());
-            RefreshMapUI();
+            SelectWaypointCore(
+                waypoint.Symbol,
+                waypoint.Type.ToString(),
+                waypoint.X,
+                waypoint.Y,
+                GetSystemWaypointWorldPosition(waypoint),
+                "Waypoint selected.",
+                onSelectedWaypoint: () => _selectedWaypoint = null);
         }
 
         private void SelectWaypoint(Waypoint waypoint)
         {
             if (waypoint == null) return;
 
-            _selectedSymbol = waypoint.Symbol;
-            _selectedWaypoint = waypoint;
-            foreach (var listEntry in _listEntries)
-            {
-                listEntry.RemoveFromClassList("selected-entry");
-            }
+            var traitSummary = waypoint.Traits != null && waypoint.Traits.Count > 0
+                ? string.Join(", ", waypoint.Traits.Select(t => t.Symbol.ToString().Replace("_", " ")))
+                : "No traits available.";
 
-            var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
+            SelectWaypointCore(
+                waypoint.Symbol,
+                waypoint.Type.ToString(),
+                waypoint.X,
+                waypoint.Y,
+                GetWaypointWorldPosition(waypoint),
+                traitSummary,
+                onSelectedWaypoint: () => _selectedWaypoint = waypoint);
+        }
+
+        private void SelectWaypointCore(string symbol, string type, int x, int y, Vector2 worldPosition, string description, Action onSelectedWaypoint)
+        {
+            _selectedSymbol = symbol;
+            onSelectedWaypoint?.Invoke();
+
+            ClearListSelection();
+
+            var selectedListEntry = _systemList?.Q<VisualElement>($"list-{symbol}");
             selectedListEntry?.AddToClassList("selected-entry");
 
             if (_mapMode == MapMode.System)
             {
-                CenterMapOnWorldPosition(GetWaypointWorldPosition(waypoint));
+                CenterMapOnWorldPosition(worldPosition);
             }
 
-            var traitSummary = waypoint.Traits != null && waypoint.Traits.Count > 0
-                ? string.Join(", ", waypoint.Traits.Select(t => t.Symbol.ToString().Replace("_", " ")))
-                : "No traits available.";
-            ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, traitSummary);
-            _ = LoadSpecializedInfo(waypoint.Symbol, waypoint.Type.ToString());
+            ApplyWaypointSelection(symbol, type, x, y, description);
+            _ = LoadSpecializedInfo(symbol, type);
             RefreshMapUI();
+        }
+
+        private void ApplyGalaxySystemSelectionDetails(DatabaseManager.IndexedSystem system)
+        {
+            if (_selectedSystemLabel != null)
+            {
+                _selectedSystemLabel.text = $"System: {system.Symbol}";
+            }
+
+            if (_wpSymbolLabel != null) _wpSymbolLabel.text = system.Symbol;
+            if (_wpTypeLabel != null) _wpTypeLabel.text = system.Type;
+            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"{system.X}, {system.Y}";
+            if (_wpDescLabel != null) _wpDescLabel.text = "Selected system. Click SYSTEM to open.";
+
+            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "System Selection";
+            if (_extraContentContainer != null)
+            {
+                _extraContentContainer.Clear();
+                _extraContentContainer.Add(new Label("Use the SYSTEM button to switch to waypoint view."));
+            }
+        }
+
+        private void ClearListSelection()
+        {
+            foreach (var listEntry in _listEntries)
+            {
+                listEntry.RemoveFromClassList("selected-entry");
+            }
         }
 
         private void ApplyWaypointSelection(string symbol, string type, int x, int y, string description)

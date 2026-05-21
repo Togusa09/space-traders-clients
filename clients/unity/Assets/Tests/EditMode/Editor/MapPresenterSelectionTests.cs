@@ -43,8 +43,8 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 y: 0,
                 waypoints: new List<SystemWaypoint>
                 {
-                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0),
-                    new SystemWaypoint("X1-TEST-B", WaypointType.MOON, 25, 0)
+                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>()),
+                    new SystemWaypoint("X1-TEST-B", WaypointType.MOON, 25, 0, new List<WaypointOrbital>())
                 },
                 factions: new List<SystemFaction>());
 
