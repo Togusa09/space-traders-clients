@@ -2,277 +2,99 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
 using SpaceTraders.Core;
-using Newtonsoft.Json;
+using SpaceTraders.Generated.Api;
+using SpaceTraders.Generated.Client;
 using VContainer;
 using Unity.Logging;
 
 namespace SpaceTraders.API
 {
-    public class SpaceTradersApiException : Exception
-    {
-        public long ResponseCode { get; }
-        public string ResponseBody { get; }
-
-        public SpaceTradersApiException(long responseCode, string message, string responseBody) 
-            : base(message)
-        {
-            ResponseCode = responseCode;
-            ResponseBody = responseBody;
-        }
-    }
-
-    public class SpaceTradersUnauthorizedException : SpaceTradersApiException
-    {
-        public SpaceTradersUnauthorizedException(string message, string responseBody) 
-            : base(401, message, responseBody) { }
-    }
-
-    public class SpaceTradersRateLimitException : SpaceTradersApiException
-    {
-        public SpaceTradersRateLimitException(string message, string responseBody) 
-            : base(429, message, responseBody) { }
-    }
-
     public class SpaceTradersClient : MonoBehaviour
     {
-        private const string BaseUrl = "https://api.spacetraders.io/v2";
-        private string _token;
-
         private AuthManager _authManager;
+        private Configuration _configuration;
+        private ApiClient _apiClient;
+
+        // Generated APIs
+        public AgentsApi Agents { get; private set; }
+        public ContractsApi Contracts { get; private set; }
+        public FactionsApi Factions { get; private set; }
+        public FleetApi Fleet { get; private set; }
+        public SystemsApi Systems { get; private set; }
+        public GlobalApi Global { get; private set; }
 
         [Inject]
         public void Construct(AuthManager authManager)
         {
             _authManager = authManager;
+            InitializeClient();
         }
 
-        public static int RateLimitRemaining { get; private set; } = -1;
-        public static string RateLimitReset { get; private set; } = string.Empty;
+        private void InitializeClient()
+        {
+            _configuration = new Configuration
+            {
+                BasePath = "https://api.spacetraders.io/v2"
+            };
+
+            // Set initial token if available
+            UpdateToken();
+
+            _apiClient = new ApiClient(_configuration.BasePath);
+            
+            // Initialize generated APIs
+            Agents = new AgentsApi(_apiClient, _apiClient, _configuration);
+            Contracts = new ContractsApi(_apiClient, _apiClient, _configuration);
+            Factions = new FactionsApi(_apiClient, _apiClient, _configuration);
+            Fleet = new FleetApi(_apiClient, _apiClient, _configuration);
+            Systems = new SystemsApi(_apiClient, _apiClient, _configuration);
+            Global = new GlobalApi(_apiClient, _apiClient, _configuration);
+
+            Log.Info("[SpaceTradersClient] Generated API client initialized.");
+        }
 
         public void SetToken(string token)
         {
-            _token = token;
-            Log.Info("[SpaceTradersClient] Token updated.");
+            _configuration.AccessToken = token;
+            Log.Info("[SpaceTradersClient] Token updated in configuration.");
         }
 
-        private void LogResponse(string endpoint, string content, bool isError = false, long responseCode = 0)
+        private void UpdateToken()
         {
-            string sanitized = LoggerInitializer.Sanitize(content);
-            if (isError)
+            if (_authManager != null && _authManager.HasAgentToken)
             {
-                if (Debug.isDebugBuild || Application.isEditor)
-                {
-                    Log.Error("[SpaceTradersClient] Failed response for {Endpoint} (Code: {Code}):\n{Response}", endpoint, responseCode, sanitized);
-                }
-                else
-                {
-                    Log.Error("[SpaceTradersClient] Failed response for {Endpoint} (Code: {Code})", endpoint, responseCode);
-                }
-            }
-            else if (Debug.isDebugBuild || Application.isEditor)
-            {
-                Log.Info("[SpaceTradersClient] Success response for {Endpoint} ({Bytes} bytes):\n{Response}", endpoint, content.Length, sanitized);
-            }
-            else
-            {
-                Log.Info("[SpaceTradersClient] Success response for {Endpoint} ({Bytes} bytes)", endpoint, content.Length);
+                SetToken(_authManager.AgentToken);
             }
         }
 
-        private void ExtractRateLimitHeaders(UnityWebRequest webRequest)
+        /// <summary>
+        /// Wrapper to handle common API response logic, retries, and errors.
+        /// </summary>
+        public async Task<T> ExecuteAsync<T>(Task<ApiResponse<T>> task, string endpointInfo = "")
         {
-            string remainingStr = webRequest.GetResponseHeader("x-rate-limit-remaining");
-            if (int.TryParse(remainingStr, out int remaining))
+            // TODO: Implement retry logic and rate limit handling here if needed.
+            // For now, simple execution with error mapping.
+            try
             {
-                RateLimitRemaining = remaining;
+                var response = await task;
+                Log.Info("[SpaceTradersClient] {Info} Success ({Code})", endpointInfo, response.StatusCode);
+                return response.Data;
             }
-            
-            string resetStr = webRequest.GetResponseHeader("x-rate-limit-reset");
-            if (!string.IsNullOrEmpty(resetStr))
+            catch (ApiException e)
             {
-                RateLimitReset = resetStr;
-            }
-        }
-
-        private void ProcessResponse(UnityWebRequest webRequest, string endpoint)
-        {
-            ExtractRateLimitHeaders(webRequest);
-
-            if (webRequest.result != UnityWebRequest.Result.Success)
-            {
-                long code = webRequest.responseCode;
-                string rawResponse = webRequest.downloadHandler?.text ?? string.Empty;
-                string errMessage = $"Error {code}: {webRequest.error}";
-                
-                LogResponse(endpoint, rawResponse, isError: true, responseCode: code);
-
-                if (code == 401)
+                Log.Error("[SpaceTradersClient] {Info} Failed ({Code}): {Error}", endpointInfo, e.ErrorCode, e.Message);
+                if (e.ErrorCode == 401)
                 {
                     _authManager.HandleTokenUnauthorized();
-                    throw new SpaceTradersUnauthorizedException(errMessage, rawResponse);
                 }
-                else if (code == 429)
-                {
-                    throw new SpaceTradersRateLimitException(errMessage, rawResponse);
-                }
-                else
-                {
-                    throw new SpaceTradersApiException(code, errMessage, rawResponse);
-                }
-            }
-            else
-            {
-                string rawResponse = webRequest.downloadHandler?.text ?? string.Empty;
-                LogResponse(endpoint, rawResponse, isError: false);
-            }
-        }
-
-        private async Task<string> ExecuteWithRetry(Func<UnityWebRequest> requestFactory, string endpoint, int maxRetries = 3)
-        {
-            int attempts = 0;
-            int delayMs = 1000;
-
-            while (true)
-            {
-                attempts++;
-                using UnityWebRequest webRequest = requestFactory();
-                try
-                {
-                    SetHeaders(webRequest);
-                    var operation = webRequest.SendWebRequest();
-
-                    while (!operation.isDone) await Task.Yield();
-
-                    ProcessResponse(webRequest, endpoint);
-                    string text = webRequest.downloadHandler.text;
-                    return text;
-                }
-                catch (SpaceTradersRateLimitException)
-                {
-                    if (attempts >= maxRetries)
-                    {
-                        throw;
-                    }
-
-                    int backoffMs = delayMs;
-                    if (!string.IsNullOrEmpty(RateLimitReset))
-                    {
-                        if (DateTime.TryParse(RateLimitReset, out DateTime resetTime))
-                        {
-                            double seconds = (resetTime - DateTime.UtcNow).TotalSeconds;
-                            if (seconds > 0 && seconds < 10)
-                            {
-                                backoffMs = Mathf.CeilToInt((float)seconds * 1000) + 100;
-                            }
-                        }
-                    }
-
-                    int jitter = UnityEngine.Random.Range(100, 300);
-                    backoffMs += jitter;
-
-                    Log.Warning("[SpaceTradersClient] Rate limit (429) hit on {Endpoint}. Retrying attempt {Attempt}/{MaxRetries} after {Delay}ms...", endpoint, attempts, maxRetries, backoffMs);
-                    await Task.Delay(backoffMs);
-                    delayMs *= 2;
-                }
-                catch (SpaceTradersApiException ex) when (ex.ResponseCode == 0 || ex.ResponseCode >= 500 || ex.ResponseCode == 408)
-                {
-                    if (attempts >= maxRetries)
-                    {
-                        throw;
-                    }
-
-                    int backoffMs = delayMs + UnityEngine.Random.Range(100, 300);
-                    Log.Warning("[SpaceTradersClient] Transient error (Code: {Code}) on {Endpoint}. Retrying attempt {Attempt}/{MaxRetries} after {Delay}ms...", ex.ResponseCode, endpoint, attempts, maxRetries, backoffMs);
-                    await Task.Delay(backoffMs);
-                    delayMs *= 2;
-                }
-                catch (Exception e)
-                {
-                    Log.Error("[SpaceTradersClient] Unexpected exception on {Endpoint}: {Error}", endpoint, e.Message);
-                    throw;
-                }
-            }
-        }
-
-        public async Task<T> GetRequest<T>(string endpoint)
-        {
-            Log.Info("[SpaceTradersClient] GET {Endpoint}", endpoint);
-            string responseText = await ExecuteWithRetry(() => UnityWebRequest.Get($"{BaseUrl}{endpoint}"), endpoint);
-            try
-            {
-                return JsonConvert.DeserializeObject<T>(responseText);
+                throw;
             }
             catch (Exception e)
             {
-                Log.Error("[SpaceTradersClient] Parse Error on {Endpoint}: {Error}\n{Response}", endpoint, e.Message, LoggerInitializer.Sanitize(responseText));
+                Log.Error("[SpaceTradersClient] {Info} Unexpected error: {Error}", endpointInfo, e.Message);
                 throw;
             }
-        }
-
-        public async Task<string> GetRequestRaw(string endpoint)
-        {
-            Log.Info("[SpaceTradersClient] GET (Raw) {Endpoint}", endpoint);
-            return await ExecuteWithRetry(() => UnityWebRequest.Get($"{BaseUrl}{endpoint}"), endpoint);
-        }
-
-        public async Task<T> PostRequest<T, R>(string endpoint, R rawData)
-        {
-            string jsonData = JsonConvert.SerializeObject(rawData);
-            Log.Info("[SpaceTradersClient] POST {Endpoint}", endpoint);
-            string responseText = await ExecuteWithRetry(() => {
-                var webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST");
-                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                webRequest.downloadHandler = new DownloadHandlerBuffer();
-                webRequest.SetRequestHeader("Content-Type", "application/json");
-                return webRequest;
-            }, endpoint);
-
-            try
-            {
-                return JsonConvert.DeserializeObject<T>(responseText);
-            }
-            catch (Exception e)
-            {
-                Log.Error("[SpaceTradersClient] Parse Error on {Endpoint}: {Error}\n{Response}", endpoint, e.Message, LoggerInitializer.Sanitize(responseText));
-                throw;
-            }
-        }
-
-        public async Task<T> PostRequest<T>(string endpoint)
-        {
-            Log.Info("[SpaceTradersClient] POST {Endpoint} (Empty)", endpoint);
-            string responseText = await ExecuteWithRetry(() => {
-                var webRequest = new UnityWebRequest($"{BaseUrl}{endpoint}", "POST");
-                webRequest.downloadHandler = new DownloadHandlerBuffer();
-                return webRequest;
-            }, endpoint);
-
-            try
-            {
-                return JsonConvert.DeserializeObject<T>(responseText);
-            }
-            catch (Exception e)
-            {
-                Log.Error("[SpaceTradersClient] Parse Error on {Endpoint}: {Error}\n{Response}", endpoint, e.Message, LoggerInitializer.Sanitize(responseText));
-                throw;
-            }
-        }
-
-        private void SetHeaders(UnityWebRequest webRequest)
-        {
-            if (string.IsNullOrEmpty(_token))
-            {
-                _token = _authManager.AgentToken;
-            }
-
-            if (!string.IsNullOrEmpty(_token))
-            {
-                webRequest.SetRequestHeader("Authorization", $"Bearer {_token}");
-            }
-            webRequest.SetRequestHeader("Accept", "application/json");
         }
     }
 }

@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using SpaceTraders.API.Models;
+using System.Linq;
+using SpaceTraders.Generated.Api;
+using SpaceTraders.Generated.Model;
 using SpaceTraders.Core;
 using UnityEngine;
 using Newtonsoft.Json;
@@ -24,28 +26,28 @@ namespace SpaceTraders.API
             _dbManager = dbManager;
         }
 
-        public async Task<RegistrationResponse> Register(string symbol, string faction)
+        public async Task<Register201Response> Register(string symbol, string faction)
         {
-            var data = new RegistrationData { symbol = symbol, faction = faction };
-            return await _client.PostRequest<RegistrationResponse, RegistrationData>("/register", data);
+            var data = new RegisterRequest(faction: (FactionSymbol)Enum.Parse(typeof(FactionSymbol), faction), symbol: symbol);
+            return await _client.Global.RegisterAsync(data);
         }
 
-        public async Task<AgentResponse> GetMyAgent()
+        public async Task<GetMyAgent200Response> GetMyAgent()
         {
-            return await _client.GetRequest<AgentResponse>("/my/agent");
+            return await _client.Agents.GetMyAgentAsync();
         }
 
-        public async Task<ContractsResponse> GetContracts()
+        public async Task<GetContracts200Response> GetContracts(int page = 1, int limit = 10)
         {
-            return await _client.GetRequest<ContractsResponse>("/my/contracts");
+            return await _client.Contracts.GetContractsAsync(page, limit);
         }
 
-        public async Task<ShipsResponse> GetShips()
+        public async Task<GetMyShips200Response> GetShips(int page = 1, int limit = 10)
         {
-            return await _client.GetRequest<ShipsResponse>("/my/ships");
+            return await _client.Fleet.GetMyShipsAsync(page, limit);
         }
 
-        public async Task<SystemsResponse> GetSystems(int page = 1, int limit = 10)
+        public async Task<GetSystems200Response> GetSystems(int page = 1, int limit = 10)
         {
             string cacheKey = $"systems_p{page}_l{limit}";
             string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
@@ -55,7 +57,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Log.Info("[APIService] Using cached systems for page {Page}", page);
-                    return JsonConvert.DeserializeObject<SystemsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<GetSystems200Response>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -63,16 +65,16 @@ namespace SpaceTraders.API
                 }
             }
 
-            string endpoint = $"/systems?page={page}&limit={limit}";
             Log.Info("[APIService] Fetching systems page {Page} from network...", page);
-            string json = await _client.GetRequestRaw(endpoint);
+            var response = await _client.Systems.GetSystemsAsync(page, limit);
             
             Log.Info("[APIService] Received systems page {Page} from network. Caching...", page);
+            string json = JsonConvert.SerializeObject(response);
             _dbManager.SetCache(cacheKey, json);
-            return JsonConvert.DeserializeObject<SystemsResponse>(json);
+            return response;
         }
 
-        public async Task<SystemResponse> GetSystem(string systemSymbol)
+        public async Task<GetSystem200Response> GetSystem(string systemSymbol)
         {
             string cacheKey = $"system_{systemSymbol}";
             string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
@@ -82,7 +84,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Log.Info("[APIService] Using cached details for system {System}", systemSymbol);
-                    return JsonConvert.DeserializeObject<SystemResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<GetSystem200Response>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -90,16 +92,16 @@ namespace SpaceTraders.API
                 }
             }
 
-            string endpoint = $"/systems/{systemSymbol}";
             Log.Info("[APIService] Fetching system {System} details from network...", systemSymbol);
-            string json = await _client.GetRequestRaw(endpoint);
+            var response = await _client.Systems.GetSystemAsync(systemSymbol);
             
             Log.Info("[APIService] Received system {System} from network. Caching...", systemSymbol);
+            string json = JsonConvert.SerializeObject(response);
             _dbManager.SetCache(cacheKey, json);
-            return JsonConvert.DeserializeObject<SystemResponse>(json);
+            return response;
         }
 
-        public async Task<SystemWaypointsResponse> GetSystemWaypoints(string systemSymbol)
+        public async Task<GetSystemWaypoints200Response> GetSystemWaypoints(string systemSymbol)
         {
             string cacheKey = $"system_waypoints_{systemSymbol}";
             string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
@@ -109,7 +111,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Log.Info("[APIService] Using cached waypoints for system {System}", systemSymbol);
-                    return JsonConvert.DeserializeObject<SystemWaypointsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<GetSystemWaypoints200Response>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -119,23 +121,21 @@ namespace SpaceTraders.API
 
             int page = 1;
             int limit = 20;
-            var allWaypoints = new List<SystemWaypoint>();
-            SystemWaypointsResponse firstPage = null;
+            var allWaypoints = new List<Waypoint>();
+            GetSystemWaypoints200Response firstPage = null;
 
             try
             {
                 while (true)
                 {
-                    string endpoint = $"/systems/{systemSymbol}/waypoints?page={page}&limit={limit}";
                     Log.Info("[APIService] Fetching waypoints for system {System} page {Page} from network...", systemSymbol, page);
-                    string json = await _client.GetRequestRaw(endpoint);
-                    var pageRes = JsonConvert.DeserializeObject<SystemWaypointsResponse>(json);
+                    var pageRes = await _client.Systems.GetSystemWaypointsAsync(systemSymbol, page, limit);
                     
-                    if (pageRes != null && pageRes.data != null)
+                    if (pageRes != null && pageRes.Data != null)
                     {
                         if (firstPage == null) firstPage = pageRes;
-                        allWaypoints.AddRange(pageRes.data);
-                        if (pageRes.meta != null && allWaypoints.Count < pageRes.meta.total && pageRes.data.Length > 0)
+                        allWaypoints.AddRange(pageRes.Data);
+                        if (pageRes.Meta != null && allWaypoints.Count < pageRes.Meta.Total && pageRes.Data.Count > 0)
                         {
                             page++;
                         }
@@ -152,7 +152,7 @@ namespace SpaceTraders.API
 
                 if (firstPage != null)
                 {
-                    firstPage.data = allWaypoints.ToArray();
+                    firstPage.Data = allWaypoints;
                     string fullJson = JsonConvert.SerializeObject(firstPage);
                     _dbManager.SetCache(cacheKey, fullJson);
                     return firstPage;
@@ -167,42 +167,29 @@ namespace SpaceTraders.API
             return null;
         }
 
-        public async Task<MarketResponse> GetMarket(string systemSymbol, string waypointSymbol)
+        public async Task<GetMarket200Response> GetMarket(string systemSymbol, string waypointSymbol)
         {
-            return await _client.GetRequest<MarketResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/market");
+            return await _client.Systems.GetMarketAsync(systemSymbol, waypointSymbol);
         }
 
-        public async Task<ShipyardResponse> GetShipyard(string systemSymbol, string waypointSymbol)
+        public async Task<GetShipyard200Response> GetShipyard(string systemSymbol, string waypointSymbol)
         {
-            return await _client.GetRequest<ShipyardResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/shipyard");
+            return await _client.Systems.GetShipyardAsync(systemSymbol, waypointSymbol);
         }
 
-        public async Task<ConstructionResponse> GetConstruction(string systemSymbol, string waypointSymbol)
+        public async Task<GetConstruction200Response> GetConstruction(string systemSymbol, string waypointSymbol)
         {
-            return await _client.GetRequest<ConstructionResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/construction");
+            return await _client.Systems.GetConstructionAsync(systemSymbol, waypointSymbol);
         }
 
-        public async Task<JumpGateResponse> GetJumpGate(string systemSymbol, string waypointSymbol)
+        public async Task<GetJumpGate200Response> GetJumpGate(string systemSymbol, string waypointSymbol)
         {
-            return await _client.GetRequest<JumpGateResponse>($"/systems/{systemSymbol}/waypoints/{waypointSymbol}/jump-gate");
+            return await _client.Systems.GetJumpGateAsync(systemSymbol, waypointSymbol);
         }
 
-        [Serializable]
-        public class JumpGate
+        public async Task<GetFactions200Response> GetFactions(int page = 1, int limit = 10)
         {
-            public string symbol;
-            public string[] connections;
-        }
-
-        [Serializable]
-        public class JumpGateResponse
-        {
-            public JumpGate data;
-        }
-
-        public async Task<FactionsResponse> GetFactions()
-        {
-            string cacheKey = "factions_list";
+            string cacheKey = $"factions_p{page}_l{limit}";
             string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
@@ -210,7 +197,7 @@ namespace SpaceTraders.API
                 try
                 {
                     Log.Info("[APIService] Using cached factions");
-                    return JsonConvert.DeserializeObject<FactionsResponse>(cachedJson);
+                    return JsonConvert.DeserializeObject<GetFactions200Response>(cachedJson);
                 }
                 catch (Exception e)
                 {
@@ -219,71 +206,68 @@ namespace SpaceTraders.API
             }
 
             Log.Info("[APIService] Fetching factions from network...");
-            string json = await _client.GetRequestRaw("/factions");
+            var response = await _client.Factions.GetFactionsAsync(page, limit);
             
-            Log.Info("[APIService] Received factions from network. Caching...");
+            Log.Info("[APIService] Received factions from network. Caching...", page);
+            string json = JsonConvert.SerializeObject(response);
             _dbManager.SetCache(cacheKey, json);
-            return JsonConvert.DeserializeObject<FactionsResponse>(json);
+            return response;
         }
 
-        public async Task<AcceptContractResponse> AcceptContract(string contractId)
+        public async Task<AcceptContract200Response> AcceptContract(string contractId)
         {
-            return await _client.PostRequest<AcceptContractResponse>($"/my/contracts/{contractId}/accept");
+            return await _client.Contracts.AcceptContractAsync(contractId);
         }
 
-        public async Task<PurchaseShipResponse> PurchaseShip(string shipType, string waypointSymbol)
+        public async Task<PurchaseShip201Response> PurchaseShip(string shipType, string waypointSymbol)
         {
-            var req = new PurchaseShipRequest { shipType = shipType, waypointSymbol = waypointSymbol };
-            return await _client.PostRequest<PurchaseShipResponse, PurchaseShipRequest>("/my/ships", req);
+            var req = new PurchaseShipRequest((ShipType)Enum.Parse(typeof(ShipType), shipType), waypointSymbol);
+            return await _client.Fleet.PurchaseShipAsync(req);
         }
 
-        public async Task<ShipNavResponse> OrbitShip(string shipSymbol)
+        public async Task<OrbitShip200Response> OrbitShip(string shipSymbol)
         {
-            return await _client.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/orbit");
+            return await _client.Fleet.OrbitShipAsync(shipSymbol);
         }
 
-        public async Task<ShipNavResponse> DockShip(string shipSymbol)
+        public async Task<DockShip200Response> DockShip(string shipSymbol)
         {
-            return await _client.PostRequest<ShipNavResponse>($"/my/ships/{shipSymbol}/dock");
+            return await _client.Fleet.DockShipAsync(shipSymbol);
         }
 
-        public async Task<NavigateResponse> NavigateShip(string shipSymbol, string waypointSymbol)
+        public async Task<NavigateShip200Response> NavigateShip(string shipSymbol, string waypointSymbol)
         {
-            var req = new NavigateRequest { waypointSymbol = waypointSymbol };
-            return await _client.PostRequest<NavigateResponse, NavigateRequest>($"/my/ships/{shipSymbol}/navigate", req);
+            var req = new NavigateShipRequest(waypointSymbol);
+            return await _client.Fleet.NavigateShipAsync(shipSymbol, req);
         }
 
-        public async Task<ExtractionResponse> ExtractResources(string shipSymbol)
+        public async Task<ExtractResources201Response> ExtractResources(string shipSymbol)
         {
-            return await _client.PostRequest<ExtractionResponse>($"/my/ships/{shipSymbol}/extract");
+            return await _client.Fleet.ExtractResourcesAsync(shipSymbol);
         }
 
-        public async Task<SellCargoResponse> SellCargo(string shipSymbol, string tradeSymbol, int units)
+        public async Task<SellCargo201Response> SellCargo(string shipSymbol, string tradeSymbol, int units)
         {
-            var req = new SellCargoRequest { symbol = tradeSymbol, units = units };
-            return await _client.PostRequest<SellCargoResponse, SellCargoRequest>($"/my/ships/{shipSymbol}/sell", req);
+            // SellCargoRequest(TradeSymbol symbol = default, int units = default)
+            var req = new SellCargoRequest(symbol: (TradeSymbol)Enum.Parse(typeof(TradeSymbol), tradeSymbol), units: units);
+            return await _client.Fleet.SellCargoAsync(shipSymbol, req);
         }
 
-        public async Task<RefuelResponse> RefuelShip(string shipSymbol, int units)
+        public async Task<RefuelShip200Response> RefuelShip(string shipSymbol, int units = 0)
         {
-            var req = new RefuelRequest { units = units };
-            return await _client.PostRequest<RefuelResponse, RefuelRequest>($"/my/ships/{shipSymbol}/refuel", req);
+            var req = new RefuelShipRequest(units: units);
+            return await _client.Fleet.RefuelShipAsync(shipSymbol, req);
         }
 
-        public async Task<RefuelResponse> RefuelShip(string shipSymbol)
+        public async Task<DeliverContract200Response> DeliverContractCargo(string contractId, string shipSymbol, string tradeSymbol, int units)
         {
-            return await _client.PostRequest<RefuelResponse>($"/my/ships/{shipSymbol}/refuel");
+            var req = new DeliverContractRequest(shipSymbol, tradeSymbol, units);
+            return await _client.Contracts.DeliverContractAsync(contractId, req);
         }
 
-        public async Task<DeliverContractResponse> DeliverContractCargo(string contractId, string shipSymbol, string tradeSymbol, int units)
+        public async Task<FulfillContract200Response> FulfillContract(string contractId)
         {
-            var req = new DeliverContractRequest { shipSymbol = shipSymbol, tradeSymbol = tradeSymbol, units = units };
-            return await _client.PostRequest<DeliverContractResponse, DeliverContractRequest>($"/my/contracts/{contractId}/deliver", req);
-        }
-
-        public async Task<FulfillContractResponse> FulfillContract(string contractId)
-        {
-            return await _client.PostRequest<FulfillContractResponse>($"/my/contracts/{contractId}/fulfill");
+            return await _client.Contracts.FulfillContractAsync(contractId);
         }
     }
 }

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
+using SpaceTraders.Generated.Model;
 using VContainer;
 using Unity.Logging;
 
@@ -35,6 +35,8 @@ namespace SpaceTraders.Core
 
         private void Start()
         {
+            if (_dbManager == null) return;
+
             int existingCount = _dbManager.GetIndexedSystemCount();
             Log.Info("[UniverseSyncManager] Initial check. Indexed systems: {Count}", existingCount);
             
@@ -77,22 +79,22 @@ namespace SpaceTraders.Core
                     if (token.IsCancellationRequested) break;
 
                     Log.Info("[UniverseSyncManager] Requesting page {Page}...", CurrentPage);
-                    SystemsResponse response = await _apiService.GetSystems(CurrentPage, limit);
+                    var response = await _apiService.GetSystems(CurrentPage, limit);
 
-                    if (response != null && response.data != null)
+                    if (response != null && response.Data != null)
                     {
-                        TotalSystemsExpected = response.meta.total;
-                        TotalPages = (int)System.Math.Ceiling((double)response.meta.total / response.meta.limit);
+                        TotalSystemsExpected = response.Meta.Total;
+                        TotalPages = (int)System.Math.Ceiling((double)response.Meta.Total / response.Meta.Limit);
                         
-                        Log.Info("[UniverseSyncManager] Received {Count} systems from API (Total Expected: {Total}).", response.data.Length, TotalSystemsExpected);
+                        Log.Info("[UniverseSyncManager] Received {Count} systems from API (Total Expected: {Total}).", response.Data.Count, TotalSystemsExpected);
 
-                        var indexed = response.data.Select(s => new DatabaseManager.IndexedSystem {
-                            Symbol = s.symbol,
-                            SectorSymbol = s.sectorSymbol,
-                            Type = s.type,
-                            X = s.x,
-                            Y = s.y,
-                            WaypointCount = s.waypoints != null ? s.waypoints.Length : 0
+                        var indexed = response.Data.Select(s => new DatabaseManager.IndexedSystem {
+                            Symbol = s.Symbol,
+                            SectorSymbol = s.SectorSymbol,
+                            Type = s.Type.ToString(),
+                            X = s.X,
+                            Y = s.Y,
+                            WaypointCount = s.Waypoints != null ? s.Waypoints.Count : 0
                         }).ToList();
 
                         _dbManager.StoreSystems(indexed);

@@ -53,13 +53,40 @@ namespace SpaceTraders.UI
                 return;
             }
 
-            _playButton = root.Q<Button>("PlayButton");
-            _settingsButton = root.Q<Button>("SettingsButton");
-            _quitButton = root.Q<Button>("QuitButton");
+            // Corrected names from MainMenu.uxml
+            _playButton = root.Q<Button>("play-button");
+            _settingsButton = root.Q<Button>("settings-button");
+            _quitButton = root.Q<Button>("exit-button");
 
-            if (_playButton != null) _playButton.clicked += OnPlayClicked;
-            if (_settingsButton != null) _settingsButton.clicked += OnSettingsClicked;
-            if (_quitButton != null) _quitButton.clicked += OnQuitClicked;
+            if (_playButton != null)
+            {
+                _playButton.clicked += OnPlayClicked;
+                Log.Info("[MenuManager] Bound Play button.");
+            }
+            else
+            {
+                Log.Warning("[MenuManager] Play button ('play-button') not found in UXML.");
+            }
+
+            if (_settingsButton != null)
+            {
+                _settingsButton.clicked += OnSettingsClicked;
+                Log.Info("[MenuManager] Bound Settings button.");
+            }
+            else
+            {
+                Log.Warning("[MenuManager] Settings button ('settings-button') not found in UXML.");
+            }
+
+            if (_quitButton != null)
+            {
+                _quitButton.clicked += OnQuitClicked;
+                Log.Info("[MenuManager] Bound Exit button.");
+            }
+            else
+            {
+                Log.Warning("[MenuManager] Exit button ('exit-button') not found in UXML.");
+            }
         }
 
         private void UpdateUI()
@@ -67,21 +94,25 @@ namespace SpaceTraders.UI
             if (_playButton != null && _authManager != null)
             {
                 _playButton.SetEnabled(_authManager.HasAgentToken);
+                Log.Info("[MenuManager] Play button enabled: {Enabled}", _authManager.HasAgentToken);
             }
         }
 
         private void OnPlayClicked()
         {
+            Log.Info("[MenuManager] Play clicked. Loading GameplayPlaceholder.");
             SceneManager.LoadScene("GameplayPlaceholder");
         }
 
         private void OnSettingsClicked()
         {
+            Log.Info("[MenuManager] Settings clicked. Loading Settings.");
             SceneManager.LoadScene("Settings");
         }
 
         private void OnQuitClicked()
         {
+            Log.Info("[MenuManager] Exit clicked. Quitting application.");
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

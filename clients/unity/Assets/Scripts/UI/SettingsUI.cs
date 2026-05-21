@@ -46,26 +46,35 @@ namespace SpaceTraders.UI
             
             if (_authManager != null)
             {
-                _agentTokenInput.value = _authManager.AgentToken;
+                if (_agentTokenInput != null) _agentTokenInput.value = _authManager.AgentToken;
             }
         }
 
         private void InitializeUI()
         {
             var uiDocument = GetComponent<UIDocument>();
-            if (uiDocument == null) return;
+            if (uiDocument == null)
+            {
+                Log.Error("[SettingsUI] UIDocument missing.");
+                return;
+            }
             
             var root = uiDocument.rootVisualElement;
-            if (root == null) return;
+            if (root == null)
+            {
+                Log.Error("[SettingsUI] Root visual element null.");
+                return;
+            }
 
-            _agentTokenInput = root.Q<TextField>("AgentTokenInput");
-            _saveButton = root.Q<Button>("SaveButton");
-            _backButton = root.Q<Button>("BackButton");
-            _startSyncButton = root.Q<Button>("StartSyncButton");
-            _stopSyncButton = root.Q<Button>("StopSyncButton");
-            _clearCacheButton = root.Q<Button>("ClearCacheButton");
-            _syncStatusLabel = root.Q<Label>("SyncStatusLabel");
-            _dbStatusLabel = root.Q<Label>("DatabaseStatusLabel");
+            // Names from Settings.uxml (kebab-case)
+            _agentTokenInput = root.Q<TextField>("agent-token-input");
+            _saveButton = root.Q<Button>("save-button");
+            _backButton = root.Q<Button>("back-button");
+            _startSyncButton = root.Q<Button>("start-sync-btn");
+            _stopSyncButton = root.Q<Button>("stop-sync-btn");
+            _clearCacheButton = root.Q<Button>("clear-cache-button");
+            _syncStatusLabel = root.Q<Label>("sync-status");
+            _dbStatusLabel = root.Q<Label>("db-count");
 
             if (_saveButton != null) _saveButton.clicked += OnSaveClicked;
             if (_backButton != null) _backButton.clicked += () => SceneManager.LoadScene("MainMenu");
@@ -99,7 +108,7 @@ namespace SpaceTraders.UI
                 if (_stopSyncButton != null) _stopSyncButton.SetEnabled(false);
             }
 
-            _dbStatusLabel.text = $"Indexed Systems: {db.GetIndexedSystemCount()}";
+            if (_dbStatusLabel != null) _dbStatusLabel.text = db.GetIndexedSystemCount().ToString();
         }
 
         private void OnStartSyncClicked() => _syncManager?.StartSync();
@@ -112,7 +121,7 @@ namespace SpaceTraders.UI
 
         private async void OnSaveClicked()
         {
-            if (_authManager == null || _client == null || _apiService == null) return;
+            if (_authManager == null || _client == null || _apiService == null || _agentTokenInput == null) return;
 
             _saveButton.SetEnabled(false);
             try
@@ -123,7 +132,7 @@ namespace SpaceTraders.UI
                 _client.SetToken(_agentTokenInput.value);
                 var response = await _apiService.GetMyAgent();
                 
-                Log.Info("[SettingsUI] Token validated for agent: {Agent}", response.data.symbol);
+                Log.Info("[SettingsUI] Token validated for agent: {Agent}", response.Data.Symbol);
             }
             catch (System.Exception ex)
             {

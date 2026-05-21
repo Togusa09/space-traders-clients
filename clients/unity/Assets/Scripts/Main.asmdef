@@ -1,0 +1,21 @@
+{
+    "name": "SpaceTraders.Main",
+    "rootNamespace": "SpaceTraders",
+    "references": [
+        "SpaceTraders.Generated",
+        "VContainer",
+        "Unity.Logging",
+        "Unity.InputSystem",
+        "Unity.Burst",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

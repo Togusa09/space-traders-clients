@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
+using SpaceTraders.Generated.Model;
 using System.Collections.Generic;
 using VContainer;
 using Unity.Logging;
@@ -22,86 +22,83 @@ namespace SpaceTraders.UI
 
         public void Populate(ScrollView list, Ship[] ships)
         {
+            if (list == null) return;
             list.Clear();
+
             foreach (var s in ships)
             {
+                if (shipEntryTemplate == null) continue;
                 var entry = shipEntryTemplate.Instantiate();
                 
-                entry.Q<Label>("ShipSymbol").text = s.symbol;
-                entry.Q<Label>("Role").text = s.registration.role;
-                entry.Q<Label>("Location").text = $"{s.nav.waypointSymbol} ({s.nav.status})";
-                entry.Q<Label>("Cargo").text = $"Cargo: {s.cargo.units}/{s.cargo.capacity}";
-                entry.Q<Label>("Fuel").text = $"Fuel: {s.fuel.current}/{s.fuel.capacity}";
+                // Mapping to Entry_Ship.uxml (kebab-case)
+                var symbolLabel = entry.Q<Label>("symbol-label");
+                var detailsLabel = entry.Q<Label>("details-label");
+                var statusLabel = entry.Q<Label>("status-label");
+                var cargoLabel = entry.Q<Label>("cargo-capacity-label");
 
-                var orbitBtn = entry.Q<Button>("BtnOrbit");
-                var dockBtn = entry.Q<Button>("BtnDock");
-                orbitBtn.SetEnabled(s.nav.status == "DOCKED");
-                dockBtn.SetEnabled(s.nav.status == "IN_ORBIT");
+                if (symbolLabel != null) symbolLabel.text = s.Symbol;
+                if (detailsLabel != null) detailsLabel.text = $"Role: {s.Registration.Role} | Location: {s.Nav.WaypointSymbol}";
+                if (statusLabel != null) statusLabel.text = $"Status: {s.Nav.Status} | Fuel: {s.Fuel.Current}/{s.Fuel.Capacity}";
+                if (cargoLabel != null) cargoLabel.text = $"Cargo: {s.Cargo.Units}/{s.Cargo.Capacity}";
 
-                orbitBtn.clicked += async () => {
-                    try {
-                        await _apiService.OrbitShip(s.symbol);
-                        Log.Info("[FleetPresenter] Ship {Symbol} put into orbit.", s.symbol);
-                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Orbit failed: {Error}", e.Message); }
-                };
-                dockBtn.clicked += async () => {
-                    try {
-                        await _apiService.DockShip(s.symbol);
-                        Log.Info("[FleetPresenter] Ship {Symbol} docked.", s.symbol);
-                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Dock failed: {Error}", e.Message); }
-                };
+                // Buttons
+                var orbitBtn = entry.Q<Button>("action-orbit-dock-btn");
+                var extractBtn = entry.Q<Button>("action-extract-btn");
+                var refuelBtn = entry.Q<Button>("action-refuel-btn");
 
-                var extractBtn = entry.Q<Button>("BtnExtract");
-                extractBtn.clicked += async () => {
-                    try {
-                        var res = await _apiService.ExtractResources(s.symbol);
-                        Log.Info("[FleetPresenter] Ship {Symbol} extracted {Units} of {Symbol2}", s.symbol, res.data.extraction.yield.units, res.data.extraction.yield.symbol);
-                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Extraction failed: {Error}", e.Message); }
-                };
-
-                var refuelBtn = entry.Q<Button>("BtnRefuel");
-                refuelBtn.clicked += async () => {
-                    try {
-                        await _apiService.RefuelShip(s.symbol);
-                        Log.Info("[FleetPresenter] Ship {Symbol} refueled.", s.symbol);
-                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Refuel failed: {Error}", e.Message); }
-                };
-
-                // Cargo details
-                var cargoList = entry.Q<VisualElement>("CargoList");
-                cargoList.Clear();
-                foreach (var item in s.cargo.inventory)
+                if (orbitBtn != null)
                 {
-                    var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween }};
-                    row.Add(new Label($"{item.symbol} x{item.units}"));
-                    
-                    var sellBtn = new Button { text = "Sell" };
-                    sellBtn.clicked += async () => {
+                    orbitBtn.text = (s.Nav.Status == ShipNavStatus.DOCKED) ? "ORBIT" : "DOCK";
+                    orbitBtn.clicked += async () => {
                         try {
-                            var res = await _apiService.SellCargo(s.symbol, item.symbol, item.units);
-                            Log.Info("[FleetPresenter] Sold {Units} {Symbol} for {Price} credits", item.units, item.symbol, res.data.transaction.totalPrice);
-                        } catch (System.Exception e) { Log.Error("[FleetPresenter] Sell failed: {Error}", e.Message); }
+                            if (s.Nav.Status == ShipNavStatus.DOCKED) await _apiService.OrbitShip(s.Symbol);
+                            else await _apiService.DockShip(s.Symbol);
+                            Log.Info("[FleetPresenter] Ship {Symbol} status toggled.", s.Symbol);
+                        } catch (System.Exception e) { Log.Error("[FleetPresenter] Toggle status failed: {Error}", e.Message); }
                     };
-                    row.Add(sellBtn);
-                    cargoList.Add(row);
                 }
 
-                // Nav logic (Simplified)
-                var navField = entry.Q<TextField>("TargetWaypoint");
-                var navBtn = entry.Q<Button>("BtnNavigate");
-                navBtn.clicked += async () => {
-                    try {
-                        var target = navField.value;
-                        if (string.IsNullOrEmpty(target)) return;
+                if (extractBtn != null)
+                {
+                    extractBtn.clicked += async () => {
+                        try {
+                            var res = await _apiService.ExtractResources(s.Symbol);
+                            Log.Info("[FleetPresenter] Extracted {Units} of {Symbol}", res.Data.Extraction.Yield.Units, res.Data.Extraction.Yield.Symbol);
+                        } catch (System.Exception e) { Log.Error("[FleetPresenter] Extraction failed: {Error}", e.Message); }
+                    };
+                }
 
-                        var sys = await _apiService.GetSystem(s.nav.systemSymbol);
-                        // Validation logic could go here
+                if (refuelBtn != null)
+                {
+                    refuelBtn.clicked += async () => {
+                        try {
+                            await _apiService.RefuelShip(s.Symbol);
+                            Log.Info("[FleetPresenter] Ship {Symbol} refueled.", s.Symbol);
+                        } catch (System.Exception e) { Log.Error("[FleetPresenter] Refuel failed: {Error}", e.Message); }
+                    };
+                }
+
+                // Cargo List
+                var cargoContainer = entry.Q<VisualElement>("cargo-list-container");
+                if (cargoContainer != null)
+                {
+                    cargoContainer.Clear();
+                    foreach (var item in s.Cargo.Inventory)
+                    {
+                        var row = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween }};
+                        row.Add(new Label($"{item.Symbol} x{item.Units}"));
                         
-                        if (s.nav.status == "DOCKED") await _apiService.OrbitShip(s.symbol);
-                        var res = await _apiService.NavigateShip(s.symbol, target);
-                        Log.Info("[FleetPresenter] Navigating {Symbol} to {Target}. Arrival: {Arrival}", s.symbol, target, res.data.nav.route.arrivalTime);
-                    } catch (System.Exception e) { Log.Error("[FleetPresenter] Navigation failed: {Error}", e.Message); }
-                };
+                        var sellBtn = new Button { text = "SELL" };
+                        sellBtn.clicked += async () => {
+                            try {
+                                var res = await _apiService.SellCargo(s.Symbol, item.Symbol.ToString(), item.Units);
+                                Log.Info("[FleetPresenter] Sold {Units} {Symbol} for {Price}", item.Units, item.Symbol, res.Data.Transaction.TotalPrice);
+                            } catch (System.Exception e) { Log.Error("[FleetPresenter] Sell failed: {Error}", e.Message); }
+                        };
+                        row.Add(sellBtn);
+                        cargoContainer.Add(row);
+                    }
+                }
 
                 list.Add(entry);
             }
