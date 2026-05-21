@@ -151,6 +151,7 @@ namespace SpaceTraders.UI
             }
 
             ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
+            _ = EnsureGalaxySystemsLoadedAsync();
 
             PopulateLegend();
             UpdateModeChrome();
@@ -222,6 +223,64 @@ namespace SpaceTraders.UI
 
             _currentPage = 1;
             PopulateSystemList();
+        }
+
+        private async Task EnsureGalaxySystemsLoadedAsync()
+        {
+            if (_allGalaxySystems != null && _allGalaxySystems.Count > 0)
+            {
+                return;
+            }
+
+            if (_apiService == null)
+            {
+                return;
+            }
+
+            var loadedSystems = new List<DatabaseManager.IndexedSystem>();
+            int page = 1;
+            const int pageSize = 100;
+
+            try
+            {
+                while (true)
+                {
+                    var response = await _apiService.GetSystems(page, pageSize);
+                    if (response?.Data == null || response.Data.Count == 0)
+                    {
+                        break;
+                    }
+
+                    loadedSystems.AddRange(response.Data.Select(system => new DatabaseManager.IndexedSystem
+                    {
+                        Symbol = system.Symbol,
+                        SectorSymbol = system.SectorSymbol,
+                        Type = system.Type.ToString(),
+                        X = system.X,
+                        Y = system.Y,
+                        WaypointCount = system.Waypoints != null ? system.Waypoints.Count : 0
+                    }));
+
+                    if (response.Meta == null || loadedSystems.Count >= response.Meta.Total || response.Data.Count < pageSize)
+                    {
+                        break;
+                    }
+
+                    page++;
+                }
+
+                if (loadedSystems.Count > 0)
+                {
+                    _allGalaxySystems = loadedSystems;
+                    _dbManager?.StoreSystems(loadedSystems);
+                    ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
+                    RefreshMapUI();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warning("[MapPresenter] Galaxy system backfill failed: {Error}", e.Message);
+            }
         }
 
         private void ResetMapCamera()
