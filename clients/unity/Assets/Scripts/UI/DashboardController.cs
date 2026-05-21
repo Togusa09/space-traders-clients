@@ -31,7 +31,7 @@ namespace SpaceTraders.UI
         private AuthManager _authManager;
         private APIService _apiService;
 
-        private Tab _currentTab = Tab.Fleet;
+        private Tab _currentTab = Tab.Agent;
 
         [Inject]
         public void Construct(SpaceTradersClient client, AuthManager authManager, APIService apiService)
@@ -48,7 +48,7 @@ namespace SpaceTraders.UI
             _mapPresenter = GetComponent<MapPresenter>();
 
             InitializeUI();
-            SwitchTab(Tab.Fleet);
+            SwitchTab(Tab.Agent);
         }
 
         private void InitializeUI()
