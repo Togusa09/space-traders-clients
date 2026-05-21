@@ -505,10 +505,7 @@ namespace SpaceTraders.UI
 
             ApplyGalaxySystemSelectionDetails(system);
 
-            if (_mapMode == MapMode.Galaxy)
-            {
-                CenterMapOnWorldPosition(GetGalaxySystemWorldPosition(system));
-            }
+            CenterMapOnWorldPositionIfOutsideView(GetGalaxySystemWorldPosition(system), MapMode.Galaxy);
 
             UpdateModeChrome();
             RefreshMapUI();
@@ -820,10 +817,7 @@ namespace SpaceTraders.UI
             var selectedListEntry = _systemList?.Q<VisualElement>($"list-{symbol}");
             selectedListEntry?.AddToClassList("selected-entry");
 
-            if (_mapMode == MapMode.System)
-            {
-                CenterMapOnWorldPosition(worldPosition);
-            }
+            CenterMapOnWorldPositionIfOutsideView(worldPosition, MapMode.System);
 
             ApplyWaypointSelection(symbol, type, x, y, description);
             _ = LoadSpecializedInfo(symbol, type);
@@ -887,6 +881,37 @@ namespace SpaceTraders.UI
             }
 
             MapOffset = new Vector2(rect.width * 0.5f, rect.height * 0.5f) - (worldPosition * MapZoom);
+        }
+
+        private void CenterMapOnWorldPositionIfOutsideView(Vector2 worldPosition, MapMode requiredMode)
+        {
+            if (_mapMode != requiredMode)
+            {
+                return;
+            }
+
+            if (IsWorldPositionInView(worldPosition))
+            {
+                return;
+            }
+
+            CenterMapOnWorldPosition(worldPosition);
+        }
+
+        private bool IsWorldPositionInView(Vector2 worldPosition)
+        {
+            if (_mapContainer == null)
+            {
+                return false;
+            }
+
+            var rect = _mapContainer.contentRect;
+            if (float.IsNaN(rect.width) || float.IsNaN(rect.height) || rect.width <= 0f || rect.height <= 0f)
+            {
+                return false;
+            }
+
+            return rect.Contains(WorldToScreen(worldPosition));
         }
 
         private async Task LoadSpecializedInfo(string waypointSymbol, string waypointType)
