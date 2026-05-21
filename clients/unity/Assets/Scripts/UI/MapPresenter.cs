@@ -33,7 +33,6 @@ namespace SpaceTraders.UI
         private TextField _searchField;
         private Label _selectedSystemLabel;
         private VisualElement _systemDetailPanel;
-        private ScrollView _waypointList;
         private VisualElement _legendItems;
         private Button _viewGalaxyButton;
         private Button _prevPageButton;
@@ -103,7 +102,6 @@ namespace SpaceTraders.UI
             _searchField = panel.Q<TextField>("system-search");
             _selectedSystemLabel = panel.Q<Label>("selected-system-title");
             _systemDetailPanel = panel.Q<VisualElement>("waypoint-details");
-            _waypointList = panel.Q<ScrollView>("wp-extra-scroll");
             _legendItems = panel.Q<VisualElement>("legend-items");
             _legendContent = panel.Q<VisualElement>("legend-content");
             _viewGalaxyButton = panel.Q<Button>("view-galaxy-btn");
@@ -635,17 +633,13 @@ namespace SpaceTraders.UI
             _selectedSystemSymbol = symbol;
 
             // Handle UI selection state
-            foreach (var listEntry in _listEntries)
-            {
-                listEntry.RemoveFromClassList("selected-entry");
-            }
+            ClearListSelection();
 
             entry ??= _systemList?.Q<VisualElement>($"list-{symbol}");
             entry?.AddToClassList("selected-entry");
 
             if (_selectedSystemLabel != null) _selectedSystemLabel.text = $"System: {symbol}";
             if (_systemDetailPanel != null) _systemDetailPanel.style.display = DisplayStyle.Flex;
-            if (_waypointList != null) _waypointList.Clear();
 
             try
             {
