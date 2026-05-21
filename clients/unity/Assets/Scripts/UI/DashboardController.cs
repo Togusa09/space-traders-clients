@@ -13,24 +13,27 @@ namespace SpaceTraders.UI
 {
     public class DashboardController : MonoBehaviour
     {
+        public enum Tab { Agent, Contracts, Fleet, Map, Factions }
+
         private VisualElement _root;
+        private VisualElement _dataContainer;
         
-        // Header
+        // Header (Labels from Dashboard.uxml - checking if they exist)
         private Label _agentNameLabel;
         private Label _creditsLabel;
         private Label _factionLabel;
         private Label _hqLabel;
 
-        // Tabs/Panels
-        private VisualElement _panelFactions;
-        private VisualElement _panelContracts;
-        private VisualElement _panelFleet;
-        private VisualElement _panelSystems;
-        private VisualElement _currentPanel;
+        // Sub-Presenters
+        private ContractPresenter _contractPresenter;
+        private FleetPresenter _fleetPresenter;
+        private MapPresenter _mapPresenter;
 
         private SpaceTradersClient _client;
         private AuthManager _authManager;
         private APIService _apiService;
+
+        private Tab _currentTab = Tab.Fleet;
 
         [Inject]
         public void Construct(SpaceTradersClient client, AuthManager authManager, APIService apiService)
@@ -42,7 +45,12 @@ namespace SpaceTraders.UI
 
         private void Start()
         {
+            _contractPresenter = GetComponent<ContractPresenter>();
+            _fleetPresenter = GetComponent<FleetPresenter>();
+            _mapPresenter = GetComponent<MapPresenter>();
+
             InitializeUI();
+            ShowTab(Tab.Fleet);
             RefreshData();
         }
 
@@ -62,50 +70,67 @@ namespace SpaceTraders.UI
                 return;
             }
 
+            _dataContainer = _root.Q<VisualElement>("data-container");
+
             // Bind Global Buttons
             var backBtn = _root.Q<Button>("back-button");
             if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene("MainMenu");
 
-            // Bind Sidebar/Tab Buttons (Mapping to Dashboard.uxml names)
-            var btnAgent = _root.Q<Button>("tab-agent");
-            var btnFactions = _root.Q<Button>("tab-factions");
-            var btnContracts = _root.Q<Button>("tab-contracts");
-            var btnFleet = _root.Q<Button>("tab-fleet");
-            var btnMap = _root.Q<Button>("tab-map");
+            // Bind Sidebar/Tab Buttons
+            _root.Q<Button>("tab-agent")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Agent));
+            _root.Q<Button>("tab-contracts")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Contracts));
+            _root.Q<Button>("tab-fleet")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Fleet));
+            _root.Q<Button>("tab-map")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Map));
+            _root.Q<Button>("tab-factions")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Factions));
 
-            if (btnAgent != null) btnAgent.clicked += () => Log.Info("[Dashboard] Agent tab clicked (Not implemented yet)");
-            if (btnFactions != null) btnFactions.clicked += () => ShowPanel(_panelFactions);
-            if (btnContracts != null) btnContracts.clicked += () => ShowPanel(_panelContracts);
-            if (btnFleet != null) btnFleet.clicked += () => ShowPanel(_panelFleet);
-            if (btnMap != null) btnMap.clicked += () => ShowPanel(_panelSystems);
-
-            // Panels (Searching for data-container if separate panels aren't defined in this UXML)
-            var dataContainer = _root.Q<VisualElement>("data-container");
-            
-            // Legacy fallbacks for single-UXML layout
-            _panelFactions = _root.Q<VisualElement>("PanelFactions") ?? dataContainer;
-            _panelContracts = _root.Q<VisualElement>("PanelContracts");
-            _panelFleet = _root.Q<VisualElement>("PanelFleet");
-            _panelSystems = _root.Q<VisualElement>("PanelSystems");
-
-            // Bind Header labels
+            // Bind Header labels (if they exist in the UXML)
             _agentNameLabel = _root.Q<Label>("AgentName");
             _creditsLabel = _root.Q<Label>("CreditsValue");
             _factionLabel = _root.Q<Label>("FactionValue");
             _hqLabel = _root.Q<Label>("HQValue");
 
-            // Default view
-            ShowPanel(_panelFleet);
-            
             Log.Info("[DashboardController] UI initialized.");
         }
 
-        private void ShowPanel(VisualElement panel)
+        private void ShowTab(Tab tab)
         {
-            if (panel == null) return;
-            if (_currentPanel != null) _currentPanel.style.display = DisplayStyle.None;
-            _currentPanel = panel;
-            _currentPanel.style.display = DisplayStyle.Flex;
+            _currentTab = tab;
+            if (_dataContainer == null) return;
+
+            _dataContainer.Clear();
+            Log.Info("[Dashboard] Showing tab: {CurrentTab}", tab);
+
+            switch (tab)
+            {
+                case Tab.Agent:
+                    var agentLabel = new Label("Agent Info (Detailed view not implemented)");
+                    _dataContainer.Add(agentLabel);
+                    break;
+                case Tab.Contracts:
+                    var contractList = new ScrollView { name = "ContractList" };
+                    _dataContainer.Add(contractList);
+                    RefreshData();
+                    break;
+                case Tab.Fleet:
+                    var fleetList = new ScrollView { name = "ShipList" };
+                    _dataContainer.Add(fleetList);
+                    RefreshData();
+                    break;
+                case Tab.Map:
+                    // MapPresenter typically handles its own UI injection or binding
+                    // For now, let's see if we can trigger its enable logic
+                    if (_mapPresenter != null)
+                    {
+                        // MapPresenter might need a specific layout
+                        Log.Info("[Dashboard] Map tab selected.");
+                    }
+                    break;
+                case Tab.Factions:
+                    var factionList = new ScrollView { name = "FactionList" };
+                    _dataContainer.Add(factionList);
+                    RefreshData();
+                    break;
+            }
         }
 
         private async void RefreshData()
@@ -120,20 +145,25 @@ namespace SpaceTraders.UI
 
             try
             {
-                // Parallel data fetching
-                var agentTask = _apiService.GetMyAgent();
-                var contractTask = _apiService.GetContracts();
-                var shipTask = _apiService.GetShips();
+                if (_currentTab == Tab.Fleet)
+                {
+                    var res = await _apiService.GetShips();
+                    UpdateFleet(res.Data.ToArray());
+                }
+                else if (_currentTab == Tab.Contracts)
+                {
+                    var res = await _apiService.GetContracts();
+                    UpdateContracts(res.Data.ToArray());
+                }
+                else if (_currentTab == Tab.Factions)
+                {
+                    var res = await _apiService.GetFactions();
+                    UpdateFactions(res.Data.ToArray());
+                }
 
-                await Task.WhenAll(agentTask, contractTask, shipTask);
-
-                if (agentTask.Result != null) UpdateHeader(agentTask.Result.Data);
-                if (contractTask.Result != null) UpdateContracts(contractTask.Result.Data.ToArray());
-                if (shipTask.Result != null) UpdateFleet(shipTask.Result.Data.ToArray());
-
-                // Factions are static-ish, fetch once if needed
-                var factions = await _apiService.GetFactions();
-                if (factions != null) UpdateFactions(factions.Data.ToArray());
+                // Always update header if labels exist
+                var agentRes = await _apiService.GetMyAgent();
+                UpdateHeader(agentRes.Data);
             }
             catch (System.Exception e)
             {
@@ -151,38 +181,30 @@ namespace SpaceTraders.UI
 
         private void UpdateFactions(Faction[] factions)
         {
-            if (_panelFactions == null) return;
-            var list = _panelFactions.Q<ScrollView>("FactionList") ?? _panelFactions.Q<ScrollView>();
+            var list = _dataContainer?.Q<ScrollView>("FactionList");
             if (list == null) return;
 
             list.Clear();
             foreach (var f in factions)
             {
                 var entry = new Label($"{f.Name} ({f.Symbol}) - Recruiting: {f.IsRecruiting}");
+                entry.style.paddingBottom = 5;
                 list.Add(entry);
             }
         }
 
         private void UpdateContracts(Contract[] contracts)
         {
-            if (_panelContracts == null) return;
-            var list = _panelContracts.Q<ScrollView>("ContractList") ?? _panelContracts.Q<ScrollView>();
-            if (list == null) return;
-
-            list.Clear();
-            var presenter = GetComponent<ContractPresenter>();
-            if (presenter != null) presenter.Populate(list, contracts);
+            var list = _dataContainer?.Q<ScrollView>("ContractList");
+            if (list == null || _contractPresenter == null) return;
+            _contractPresenter.Populate(list, contracts);
         }
 
         private void UpdateFleet(Ship[] ships)
         {
-            if (_panelFleet == null) return;
-            var list = _panelFleet.Q<ScrollView>("ShipList") ?? _panelFleet.Q<ScrollView>();
-            if (list == null) return;
-
-            list.Clear();
-            var presenter = GetComponent<FleetPresenter>();
-            if (presenter != null) presenter.Populate(list, ships);
+            var list = _dataContainer?.Q<ScrollView>("ShipList");
+            if (list == null || _fleetPresenter == null) return;
+            _fleetPresenter.Populate(list, ships);
         }
 
         // --- Polling for active views ---
@@ -190,41 +212,10 @@ namespace SpaceTraders.UI
         private void Update()
         {
             _pollTimer += Time.deltaTime;
-            if (_pollTimer > 5f)
+            if (_pollTimer > 10f)
             {
                 _pollTimer = 0f;
-                _ = PollStatusUpdates();
-            }
-        }
-
-        private async Task PollStatusUpdates()
-        {
-            if (_apiService == null) return;
-
-            if (_currentPanel == _panelFleet)
-            {
-                var ships = await _apiService.GetShips();
-                if (ships != null) UpdateFleet(ships.Data.ToArray());
-            }
-            else if (_currentPanel == _panelContracts)
-            {
-                try
-                {
-                    var agent = await _apiService.GetMyAgent();
-                    if (agent != null) UpdateHeader(agent.Data);
-
-                    var contracts = await _apiService.GetContracts();
-                    if (contracts != null) UpdateContracts(contracts.Data.ToArray());
-
-                    var ships = await _apiService.GetShips();
-                    if (ships != null) UpdateFleet(ships.Data.ToArray());
-                }
-                catch { /* silence background poll errors */ }
-            }
-            else if (_currentPanel == _panelFactions)
-            {
-                var factions = await _apiService.GetFactions();
-                if (factions != null) UpdateFactions(factions.Data.ToArray());
+                RefreshData();
             }
         }
     }
