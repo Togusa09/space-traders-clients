@@ -22,7 +22,6 @@ namespace SpaceTraders.UI
 
         [Header("Templates")]
         public VisualTreeAsset systemEntryTemplate;
-        public VisualTreeAsset waypointIconTemplate;
         public VisualTreeAsset systemPanelTemplate;
 
         [Header("UI References")]
