@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
@@ -14,25 +16,6 @@ namespace SpaceTraders.Core
     {
         private const string AgentTokenKey = "SpaceTraders_AgentToken";
 
-        private static AuthManager _instance;
-        public static AuthManager Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<AuthManager>();
-                    if (_instance == null)
-                    {
-                        GameObject go = new GameObject("AuthManager");
-                        _instance = go.AddComponent<AuthManager>();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return _instance;
-            }
-        }
-
         public string AgentToken { get; private set; }
         public bool HasAgentToken => !string.IsNullOrEmpty(AgentToken);
         public TokenState CurrentTokenState { get; private set; } = TokenState.Unknown;
@@ -41,14 +24,6 @@ namespace SpaceTraders.Core
 
         private void Awake()
         {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
             LoadTokens();
         }
 
@@ -59,15 +34,16 @@ namespace SpaceTraders.Core
             PlayerPrefs.SetString(AgentTokenKey, encryptedToken);
             PlayerPrefs.Save();
             CurrentTokenState = string.IsNullOrEmpty(token) ? TokenState.Unknown : TokenState.Valid;
-            Debug.Log($"[AuthManager] Token saved and encrypted: {(string.IsNullOrEmpty(token) ? "EMPTY" : "EXISTS")}");
+            Log.Info("[AuthManager] Token saved and encrypted: {State}", (string.IsNullOrEmpty(token) ? "EMPTY" : "EXISTS"));
         }
 
-        public void ClearTokens()
+        public void ClearTokens(bool keepInvalidState = false)
         {
             AgentToken = null;
             PlayerPrefs.DeleteKey(AgentTokenKey);
             PlayerPrefs.Save();
-            CurrentTokenState = TokenState.Unknown;
+            CurrentTokenState = keepInvalidState ? TokenState.Invalid : TokenState.Unknown;
+            Log.Info("[AuthManager] Tokens cleared. State: {State}", CurrentTokenState);
         }
 
         public void LoadTokens()
@@ -83,15 +59,14 @@ namespace SpaceTraders.Core
                 AgentToken = string.Empty;
                 CurrentTokenState = TokenState.Unknown;
             }
-            Debug.Log($"[AuthManager] Token loaded and decrypted: {(string.IsNullOrEmpty(AgentToken) ? "EMPTY" : "EXISTS")} (State: {CurrentTokenState})");
+            Log.Info("[AuthManager] Token loaded and decrypted: {State} (State: {TokenState})", (string.IsNullOrEmpty(AgentToken) ? "EMPTY" : "EXISTS"), CurrentTokenState);
         }
 
         public void HandleTokenUnauthorized()
         {
-            CurrentTokenState = TokenState.Invalid;
-            ClearTokens();
+            Log.Warning("[AuthManager] Handling unauthorized token (401).");
+            ClearTokens(keepInvalidState: true);
             OnTokenUnauthorized?.Invoke();
         }
     }
 }
-

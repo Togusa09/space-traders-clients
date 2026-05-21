@@ -11,29 +11,15 @@ namespace SpaceTraders.Tests
     public class DatabaseManagerTests
     {
         private string _dbPath;
-        private string _backupPath;
         private DatabaseManager _dbManager;
         private GameObject _dbGo;
 
         [SetUp]
         public void Setup()
         {
-            _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
-            _backupPath = _dbPath + ".backup";
-
-            // Backup existing player database to prevent data loss during tests
-            try
-            {
-                if (File.Exists(_dbPath))
-                {
-                    if (File.Exists(_backupPath)) File.Delete(_backupPath);
-                    File.Copy(_dbPath, _backupPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[DatabaseManagerTests] Setup backup failed: {ex.Message}");
-            }
+            string testDir = Path.Combine(Path.GetTempPath(), "SpaceTradersTests", Guid.NewGuid().ToString("N"));
+            _dbPath = Path.Combine(testDir, "spacetraders_test.db");
+            Environment.SetEnvironmentVariable("SPACETRADERS_DB_PATH", _dbPath);
 
             // Create a fresh instance of DatabaseManager
             _dbGo = new GameObject("TestDatabaseManager");
@@ -50,20 +36,25 @@ namespace SpaceTraders.Tests
                 UnityEngine.Object.DestroyImmediate(_dbGo);
             }
 
-            // Restore the backup database
+            Environment.SetEnvironmentVariable("SPACETRADERS_DB_PATH", null);
+
+            // Delete isolated test database files/directories.
             try
             {
-                if (File.Exists(_dbPath)) File.Delete(_dbPath);
-
-                if (File.Exists(_backupPath))
+                if (!string.IsNullOrEmpty(_dbPath))
                 {
-                    File.Copy(_backupPath, _dbPath);
-                    File.Delete(_backupPath);
+                    if (File.Exists(_dbPath)) File.Delete(_dbPath);
+
+                    string testDir = Path.GetDirectoryName(_dbPath);
+                    if (!string.IsNullOrEmpty(testDir) && Directory.Exists(testDir))
+                    {
+                        Directory.Delete(testDir, true);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[DatabaseManagerTests] Restore backup failed: {ex.Message}");
+                Debug.LogWarning($"[DatabaseManagerTests] Test DB cleanup failed: {ex.Message}");
             }
         }
 
@@ -145,6 +136,77 @@ namespace SpaceTraders.Tests
             Assert.IsTrue(solSystems.Exists(s => s.Symbol == "SOL-A"));
             Assert.IsTrue(solSystems.Exists(s => s.Symbol == "SOL-B"));
             Assert.IsFalse(solSystems.Exists(s => s.Symbol == "VEGA-I"));
+        }
+
+        [Test]
+        public void StoreAndGetJumpGateWaypoints_Success()
+        {
+            var waypoints = new List<(string, string)>
+            {
+                ("SOL-A-JG1", "SOL-A"),
+                ("VEGA-I-JG2", "VEGA-I")
+            };
+
+            _dbManager.StoreJumpGateWaypoints(waypoints);
+
+            Assert.AreEqual(2, _dbManager.GetIndexedJumpGateCount());
+
+            // All should be pending (ConnectionsJson == null)
+            var pending = _dbManager.GetPendingJumpGates();
+            Assert.AreEqual(2, pending.Count);
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "SOL-A-JG1" && g.SystemSymbol == "SOL-A"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "VEGA-I-JG2" && g.SystemSymbol == "VEGA-I"));
+        }
+
+        [Test]
+        public void StoreJumpGateConnections_UpdatesExistingRecord()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)> { ("SOL-A-JG1", "SOL-A") });
+
+            var connections = new List<string> { "VEGA-I-JG2", "ALPHA-B-JG3" };
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", connections);
+
+            var fetched = _dbManager.GetAllJumpGateConnections();
+            Assert.AreEqual(1, fetched.Count);
+
+            var gate = fetched[0];
+            Assert.AreEqual("SOL-A-JG1", gate.WaypointSymbol);
+            Assert.IsNotNull(gate.ConnectionsJson);
+            Assert.IsTrue(gate.ConnectionsJson.Contains("VEGA-I-JG2"));
+            Assert.IsTrue(gate.ConnectionsJson.Contains("ALPHA-B-JG3"));
+        }
+
+        [Test]
+        public void GetPendingJumpGates_ReturnsOnlyUnfetched()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)>
+            {
+                ("SOL-A-JG1", "SOL-A"),
+                ("VEGA-I-JG2", "VEGA-I"),
+                ("ALPHA-B-JG3", "ALPHA-B")
+            });
+
+            // Fetch connections for one of them
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", new List<string> { "VEGA-I-JG2" });
+
+            var pending = _dbManager.GetPendingJumpGates();
+            Assert.AreEqual(2, pending.Count);
+            Assert.IsFalse(pending.Exists(g => g.WaypointSymbol == "SOL-A-JG1"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "VEGA-I-JG2"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "ALPHA-B-JG3"));
+        }
+
+        [Test]
+        public void ClearCache_AlsoClearsJumpGates()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)> { ("SOL-A-JG1", "SOL-A") });
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", new List<string> { "VEGA-I-JG2" });
+
+            Assert.AreEqual(1, _dbManager.GetIndexedJumpGateCount());
+
+            _dbManager.ClearCache();
+
+            Assert.AreEqual(0, _dbManager.GetIndexedJumpGateCount());
         }
     }
 }

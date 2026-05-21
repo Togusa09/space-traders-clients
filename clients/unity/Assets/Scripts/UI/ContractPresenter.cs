@@ -1,141 +1,82 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UIElements;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
-using SpaceTraders.Core;
+using SpaceTraders.Generated.Model;
+using System.Collections.Generic;
+using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
-    public class ContractPresenter
+    public class ContractPresenter : MonoBehaviour
     {
-        private readonly DashboardController _controller;
+        public VisualTreeAsset contractEntryTemplate;
 
-        public ContractPresenter(DashboardController controller)
+        private APIService _apiService;
+
+        [Inject]
+        public void Construct(APIService apiService)
         {
-            _controller = controller;
+            _apiService = apiService;
         }
 
-        public VisualElement BindContract(Contract c, VisualTreeAsset contractTemplate)
+        public void Populate(ScrollView list, Contract[] contracts)
         {
-            var element = contractTemplate.Instantiate();
-            var root = element.Q<VisualElement>(null, "dashboard-entry");
-            if (root == null) root = element.Q<VisualElement>();
+            if (list == null) return;
+            list.Clear();
 
-            element.Q<Label>("id-label").text = $"ID: {c.id}";
-            element.Q<Label>("type-label").text = $"Type: {c.type} | Faction: {c.factionSymbol}";
-            element.Q<Label>("status-label").text = $"Accepted: {(c.accepted ? "Yes" : "No")} | Fulfilled: {(c.fulfilled ? "Yes" : "No")}";
-
-            // Detailed Panel
-            var detailsContainer = new VisualElement();
-            detailsContainer.AddToClassList("ship-details-container");
-            root.Add(detailsContainer);
-
-            // Payments
-            detailsContainer.Add(new Label($"Payment: Upfront: {c.terms.payment.onAccepted:N0} C | Completion: {c.terms.payment.onFulfilled:N0} C") { style = { fontSize = 11, color = Color.gray } });
-            detailsContainer.Add(new Label($"Deadline: {c.terms.deadline}") { style = { fontSize = 11, color = Color.gray, marginBottom = 5 } });
-
-            if (!c.accepted)
+            foreach (var c in contracts)
             {
-                var acceptBtn = new Button(async () => {
-                    _controller.SetStatusText("Accepting contract...");
-                    try
-                    {
-                        await APIService.Instance.AcceptContract(c.id);
-                        _controller.ShowPopupMessage("Contract Accepted", $"Contract accepted successfully!\nCredits Received upfront: {c.terms.payment.onAccepted:N0} C", Color.green);
-                        _controller.TriggerTabSwitch(DashboardController.Tab.Contracts);
-                    }
-                    catch (Exception ex)
-                    {
-                        _controller.ShowPopupMessage("Accept Failed", $"Failed to accept contract:\n{ex.Message}", Color.red);
-                    }
-                }) { text = "ACCEPT CONTRACT" };
-                acceptBtn.AddToClassList("button");
-                acceptBtn.AddToClassList("btn-small");
-                acceptBtn.AddToClassList("btn-green");
-                acceptBtn.style.width = 150; acceptBtn.style.height = 25;
-                detailsContainer.Add(acceptBtn);
-            }
-            else if (!c.fulfilled)
-            {
-                detailsContainer.Add(new Label("Deliverables:") { style = { fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold, marginTop = 5 } });
-                bool allFulfilled = true;
+                if (contractEntryTemplate == null) continue;
+                var entry = contractEntryTemplate.Instantiate();
+                
+                // Mapping to Entry_Contract.uxml names (kebab-case)
+                var idLabel = entry.Q<Label>("id-label");
+                var typeLabel = entry.Q<Label>("type-label");
+                var statusLabel = entry.Q<Label>("status-label");
 
-                foreach (var d in c.terms.deliver)
+                if (idLabel != null) idLabel.text = $"ID: {c.Id}";
+                if (typeLabel != null) typeLabel.text = $"Type: {c.Type} | Faction: {c.FactionSymbol}";
+                if (statusLabel != null)
                 {
-                    int remaining = d.unitsRequired - d.unitsFulfilled;
-                    if (remaining > 0) allFulfilled = false;
-
-                    var delivRow = new VisualElement { style = { flexDirection = FlexDirection.Row, justifyContent = Justify.SpaceBetween, alignItems = Align.Center, marginTop = 2, marginBottom = 2 } };
-                    delivRow.Add(new Label($"• {d.tradeSymbol} to {d.destinationSymbol}: {d.unitsFulfilled}/{d.unitsRequired} units") { style = { fontSize = 11 } });
-                    detailsContainer.Add(delivRow);
-
-                    if (remaining > 0)
-                    {
-                        // Check if any ship is docked at d.destinationSymbol and has d.tradeSymbol
-                        foreach (var ship in _controller.PlayerShips)
-                        {
-                            if (ship.nav.status == "DOCKED" && ship.nav.waypointSymbol == d.destinationSymbol)
-                            {
-                                var cargoItem = ship.cargo.inventory?.FirstOrDefault(i => i.symbol == d.tradeSymbol);
-                                if (cargoItem != null && cargoItem.units > 0)
-                                {
-                                    int unitsToDeliver = Math.Min(cargoItem.units, remaining);
-                                    var deliverBtn = new Button(async () => {
-                                        _controller.SetStatusText("Delivering cargo...");
-                                        try
-                                        {
-                                            await APIService.Instance.DeliverContractCargo(c.id, ship.symbol, d.tradeSymbol, unitsToDeliver);
-                                            _controller.ShowPopupMessage("Cargo Delivered", $"Successfully delivered {unitsToDeliver} units of {d.tradeSymbol} from ship {ship.symbol}!", Color.green);
-                                            _controller.TriggerTabSwitch(DashboardController.Tab.Contracts);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            _controller.ShowPopupMessage("Delivery Failed", $"Failed to deliver cargo:\n{ex.Message}", Color.red);
-                                        }
-                                    }) { text = $"DELIVER FROM {ship.symbol} ({unitsToDeliver})" };
-                                    deliverBtn.AddToClassList("button");
-                                    deliverBtn.AddToClassList("btn-small");
-                                    deliverBtn.AddToClassList("btn-orange");
-                                    deliverBtn.style.width = 180; deliverBtn.style.height = 20; deliverBtn.style.fontSize = 9;
-                                    detailsContainer.Add(deliverBtn);
-                                }
-                            }
-                        }
-                    }
+                    statusLabel.text = $"Accepted: {(c.Accepted ? "YES" : "NO")} | Fulfilled: {(c.Fulfilled ? "YES" : "NO")}";
+                    statusLabel.style.color = c.Fulfilled ? Color.green : (c.Accepted ? Color.cyan : Color.yellow);
                 }
 
-                if (allFulfilled)
+                // Note: Entry_Contract.uxml seems missing Accept/Fulfill buttons and Deliverables list
+                // I will add them dynamically if they are missing from the template
+                var actions = entry.Q<VisualElement>("actions-container") ?? entry.ElementAt(0); // Fallback to root element
+                
+                if (entry.Q<Button>("btn-accept") == null)
                 {
-                    var fulfillBtn = new Button(async () => {
-                        _controller.SetStatusText("Fulfilling contract...");
-                        try
-                        {
-                            await APIService.Instance.FulfillContract(c.id);
-                            _controller.ShowPopupMessage("Contract Fulfilled", $"Contract fulfilled successfully!\nCredits Received on fulfillment: {c.terms.payment.onFulfilled:N0} C", Color.green);
-                            _controller.TriggerTabSwitch(DashboardController.Tab.Contracts);
-                        }
-                        catch (Exception ex)
-                        {
-                            _controller.ShowPopupMessage("Fulfillment Failed", $"Failed to fulfill contract:\n{ex.Message}", Color.red);
-                        }
-                    }) { text = "FULFILL CONTRACT" };
-                    fulfillBtn.AddToClassList("button");
-                    fulfillBtn.AddToClassList("btn-small");
-                    fulfillBtn.AddToClassList("btn-blue");
-                    fulfillBtn.style.width = 150; fulfillBtn.style.height = 25;
-                    detailsContainer.Add(fulfillBtn);
+                    var acceptBtn = new Button { name = "btn-accept", text = "ACCEPT" };
+                    acceptBtn.SetEnabled(!c.Accepted);
+                    acceptBtn.clicked += async () => {
+                        try {
+                            await _apiService.AcceptContract(c.Id);
+                            Log.Info("[ContractPresenter] Contract {Id} accepted.", c.Id);
+                        } catch (System.Exception e) { Log.Error("[ContractPresenter] Accept failed: {Error}", e.Message); }
+                    };
+                    actions.Add(acceptBtn);
                 }
-            }
-            else
-            {
-                detailsContainer.Add(new Label("Contract Completed") { style = { color = Color.green, fontSize = 11, unityFontStyleAndWeight = FontStyle.Bold } });
-            }
 
-            return element;
+                if (entry.Q<Button>("btn-fulfill") == null)
+                {
+                    var fulfillBtn = new Button { name = "btn-fulfill", text = "FULFILL" };
+                    fulfillBtn.SetEnabled(c.Accepted && !c.Fulfilled);
+                    
+                    // Fulfill check simplified here
+                    fulfillBtn.clicked += async () => {
+                        try {
+                            await _apiService.FulfillContract(c.Id);
+                            Log.Info("[ContractPresenter] Contract {Id} fulfilled.", c.Id);
+                        } catch (System.Exception e) { Log.Error("[ContractPresenter] Fulfill failed: {Error}", e.Message); }
+                    };
+                    actions.Add(fulfillBtn);
+                }
+
+                list.Add(entry);
+            }
         }
     }
 }

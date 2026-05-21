@@ -1,65 +1,85 @@
 using UnityEngine;
 using UnityEngine.UIElements;
-using UnityEngine.SceneManagement;
-using SpaceTraders.Core;
 using SpaceTraders.API;
-using SpaceTraders.API.Models;
-using System;
+using SpaceTraders.Generated.Model;
+using VContainer;
+using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
     public class RegistrationUI : MonoBehaviour
     {
-        [SerializeField] private UIDocument uiDocument;
-        [SerializeField] private string mainMenuSceneName = "MainMenu";
-
         private TextField _symbolInput;
-        private DropdownField _factionDropdown;
+        private TextField _factionInput;
         private Button _registerButton;
-        private Button _backButton;
         private Label _statusLabel;
 
-        private void OnEnable()
+        private APIService _apiService;
+        private Core.GameManager _gameManager;
+
+        [Inject]
+        public void Construct(APIService apiService, Core.GameManager gameManager)
         {
+            _apiService = apiService;
+            _gameManager = gameManager;
+        }
+
+        private void Start()
+        {
+            InitializeUI();
+        }
+
+        private void InitializeUI()
+        {
+            var uiDocument = GetComponent<UIDocument>();
+            if (uiDocument == null)
+            {
+                Log.Error("[RegistrationUI] UIDocument missing.");
+                return;
+            }
+
             var root = uiDocument.rootVisualElement;
+            if (root == null)
+            {
+                Log.Error("[RegistrationUI] Root visual element null.");
+                return;
+            }
 
             _symbolInput = root.Q<TextField>("symbol-input");
-            _factionDropdown = root.Q<DropdownField>("faction-dropdown");
+            _factionInput = root.Q<TextField>("faction-input");
             _registerButton = root.Q<Button>("register-button");
-            _backButton = root.Q<Button>("back-button");
             _statusLabel = root.Q<Label>("status-label");
 
-            // Populate factions
-            _factionDropdown.choices = new System.Collections.Generic.List<string> { "COSMIC", "VOID", "GALACTIC", "QUANTUM", "DOMINION" };
-            _factionDropdown.value = "COSMIC";
-
-            _registerButton.clicked += OnRegisterClicked;
-            _backButton.clicked += () => SceneManager.LoadScene(mainMenuSceneName);
+            if (_registerButton != null) _registerButton.clicked += OnRegisterClicked;
+            else Log.Warning("[RegistrationUI] 'register-button' not found.");
         }
 
         private async void OnRegisterClicked()
         {
-            string symbol = _symbolInput.value;
-            string faction = _factionDropdown.value;
+            if (_apiService == null || _gameManager == null || _symbolInput == null || _factionInput == null) return;
 
-            if (string.IsNullOrEmpty(symbol))
+            string symbol = _symbolInput.value;
+            string faction = _factionInput.value;
+
+            if (string.IsNullOrEmpty(symbol) || string.IsNullOrEmpty(faction))
             {
-                _statusLabel.text = "Please enter a symbol.";
+                if (_statusLabel != null) _statusLabel.text = "Symbol and Faction are required.";
                 return;
             }
 
-            _statusLabel.text = "Registering...";
             _registerButton.SetEnabled(false);
+            if (_statusLabel != null) _statusLabel.text = "Registering...";
 
             try
             {
-                var response = await APIService.Instance.Register(symbol, faction);
-                _statusLabel.text = "Registration successful!";
-                GameManager.Instance.OnRegistrationSuccess(response.data.token);
+                var response = await _apiService.Register(symbol, faction);
+                if (_statusLabel != null) _statusLabel.text = "Registration successful!";
+                // response.Data.Token (Generated model naming)
+                _gameManager.OnRegistrationSuccess(response.Data.Token);
             }
-            catch (Exception e)
+            catch (System.Exception ex)
             {
-                _statusLabel.text = $"Registration failed: {e.Message}";
+                if (_statusLabel != null) _statusLabel.text = $"Error: {ex.Message}";
                 _registerButton.SetEnabled(true);
             }
         }

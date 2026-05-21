@@ -1,0 +1,7 @@
+{
+    "name": "SpaceTraders.Generated",
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ]
+}

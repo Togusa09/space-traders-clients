@@ -1,109 +1,60 @@
-# Unity Scene Setup Guide
+# Scene Setup & VContainer Integration
 
-Follow these steps to set up the scenes you created in the Unity Editor using the provided scripts and UI Toolkit assets.
+This guide explains how to properly set up your Unity scenes to work with the new Dependency Injection (VContainer) and Structured Logging systems.
 
-## 1. Global Setup (Project Settings)
-Ensure all scenes are added to your Build Settings so navigation works:
-1. Go to **File > Build Settings**.
-2. Drag and drop the following scenes into the **Scenes In Build** list:
-   - `MainMenu`
-   - `Settings`
-   - `GameplayPlaceholder`
-   - `Registration` (If you intend to use it)
+## 1. The Project Root Lifetime Scope
+The project uses **VContainer** for application-wide dependencies (Managers and Services).
 
----
+### Setup:
+1.  **Create the Prefab:**
+    *   Create an empty GameObject in a new scene.
+    *   Attach the **`GameLifetimeScope`** script to it.
+    *   Create child GameObjects for the following and attach their scripts:
+        *   `DatabaseManager`
+        *   `AuthManager`
+        *   `SpaceTradersClient`
+        *   `APIService`
+        *   `UniverseSyncManager`
+        *   `GameManager`
+    *   Drag this GameObject into your project folder to create a **Prefab**.
+2.  **Configure VContainer Settings:**
+    *   Go to `Assets -> Create -> VContainer -> VContainer Settings`.
+    *   In the **`VContainer Settings`** asset, find the **`Root Lifetime Scope`** field.
+    *   Assign your **`GameLifetimeScope`** prefab to this field.
+    *   *Note:* VContainer will now automatically instantiate this prefab at startup and make it a parent to all other scopes.
 
-## 2. Setup the `MainMenu` Scene
+## 2. Scene-Specific Lifetime Scopes
+Each scene that contains UI or scene-specific logic needs its own **`LifetimeScope`** to handle injection for those objects.
 
-1. **Create the UI Document**:
-   - Right-click in the Hierarchy: **UI Toolkit > UI Document**.
-   - Select the `UIDocument` GameObject.
-   - In the Inspector, assign **Source Asset**: `Assets/UI/Layouts/MainMenu.uxml`.
+### Setup for MainMenu, Settings, etc.:
+1.  In your scene (e.g., `MainMenu`), create an empty GameObject named **`MainMenuLifetimeScope`**.
+2.  Attach a new script that inherits from `LifetimeScope` (or use the generic `LifetimeScope` component if only using Auto-Inject).
+3.  **To Inject into UI MonoBehaviours:**
+    *   **Option A (Recommended):** Add your UI GameObjects (like the one with `MenuManager`) to the **`Auto Inject Game Objects`** list in the `LifetimeScope` Inspector.
+    *   **Option B (Code-based):** Create a custom script for the scope and register the component:
+        ```csharp
+        protected override void Configure(IContainerBuilder builder) {
+            builder.RegisterComponentInHierarchy<MenuManager>();
+        }
+        ```
 
-2. **Add Core Managers**:
-   - Create an Empty GameObject named `Core`.
-   - Attach the following scripts to it:
-     - `AuthManager`
-     - `SpaceTradersClient`
-   - Create another Empty GameObject named `MenuManager`.
-   - Attach the `MenuManager` script to it.
-   - **Link the Inspector fields**:
-     - Drag the `UIDocument` GameObject into the **UI Document** field.
-     - Drag the `Core` GameObject into the **Auth Manager** field.
+## 3. UI Toolkit Setup
+For all UI scenes (`MainMenu`, `Settings`, `Registration`, `Dashboard`):
+1.  Ensure there is a GameObject with a **`UIDocument`** component.
+2.  Assign the correct `.uxml` file to the `Visual Tree Asset` field.
+3.  Attach the corresponding script (e.g., `MenuManager`) to a GameObject.
+4.  **Crucial:** Ensure that GameObject is registered for injection in the scene's `LifetimeScope` (see Step 2).
 
----
+## 4. Initialization Scene
+It is recommended to have a dedicated **Initialization** scene that is loaded first. This scene can be empty, as the **Project Root Lifetime Scope** will be created automatically before any scene loads if configured in `VContainerSettings`.
 
-## 3. Setup the `Settings` Scene
+## 5. Troubleshooting
 
-1. **Create the UI Document**:
-   - Right-click in the Hierarchy: **UI Toolkit > UI Document**.
-   - Select the `UIDocument` GameObject.
-   - In the Inspector, assign **Source Asset**: `Assets/UI/Layouts/Settings.uxml`.
+### NullReferenceException / "AuthManager not injected"
+If a dependency is null:
+*   Verify the `GameLifetimeScope` prefab is assigned in `VContainerSettings`.
+*   Verify the manager (e.g., `AuthManager`) is a child of the `GameLifetimeScope` prefab.
+*   Verify the scene has its own `LifetimeScope` and the script (e.g., `MenuManager`) is in the `Auto Inject Game Objects` list.
 
-2. **Add Core Managers**:
-   - Create an Empty GameObject named `Core`.
-   - Attach the following scripts:
-     - `AuthManager`
-     - `SpaceTradersClient`
-     - `APIService` (Drag `SpaceTradersClient` into its **Client** field).
-   - Create another Empty GameObject named `SettingsUI`.
-   - Attach the `SettingsUI` script to it.
-   - **Link the Inspector fields**:
-     - Drag `UIDocument` GameObject into the **UI Document** field.
-     - Drag `Core` (with AuthManager) into the **Auth Manager** field.
-     - Drag `Core` (with SpaceTradersClient) into the **Api Client** field.
-     - Drag `Core` (with APIService) into the **Api Service** field.
-
----
-
-## 4. Setting up the Popup UI
-The Settings page now uses a popup to display test results.
-1. Open `Assets/UI/Layouts/Settings.uxml` in the **UI Builder**.
-2. From the Library, drag and drop `Assets/UI/Layouts/Popup.uxml` into the **Hierarchy** of the `Settings.uxml` as a child of the root.
-3. Save the UXML.
-
-## 4. Setup the `Registration` Scene (Optional)
-
-1. **Create the UI Document**:
-   - Right-click in the Hierarchy: **UI Toolkit > UI Document**.
-   - assign **Source Asset**: `Assets/UI/Layouts/Registration.uxml`.
-
-2. **Add Core Managers**:
-   - Create an Empty GameObject named `Core`.
-   - Attach: `AuthManager`, `SpaceTradersClient`, `APIService`, and `GameManager`.
-   - **Configure APIService**: Drag `SpaceTradersClient` into its "Client" field.
-   - **Configure GameManager**: Link `SpaceTradersClient`, `APIService`, and `AuthManager` from the same object.
-   
-3. **Add UI Logic**:
-   - Create an Empty GameObject named `RegistrationUI`.
-   - Attach the `RegistrationUI` script.
-   - **Link the Inspector fields**:
-     - Drag `UIDocument`, `APIService`, and `GameManager` into their respective slots.
-
----
-
-## 5. Setup the `GameplayPlaceholder` Scene (Gameplay Dashboard)
-The placeholder has been replaced with a functional Gameplay Dashboard.
-1. **Create the UI Document**:
-   - Right-click in the Hierarchy: **UI Toolkit > UI Document**.
-   - assign **Source Asset**: `Assets/UI/Layouts/Dashboard.uxml`.
-
-2. **Add Core Managers**:
-   - Create an Empty GameObject named `Core`.
-   - Attach: `AuthManager`, `SpaceTradersClient`, and `APIService`.
-   - **Configure APIService**: Drag `SpaceTradersClient` into its **Client** field.
-
-3. **Add Dashboard Controller**:
-   - Create an Empty GameObject named `DashboardController`.
-   - Attach the `DashboardController` script.
-   - **Link the Inspector fields**:
-     - Drag `UIDocument` GameObject into the **UI Document** field.
-     - Drag `Core` (with APIService) into the **Api Service** field.
-     - Drag `Core` (with AuthManager) into the **Auth Manager** field.
-     - Drag `Core` (with SpaceTradersClient) into the **Api Client** field.
-
----
-
-## Pro-Tips for UI Toolkit:
-- **Visual Preview**: You can double-click any `.uxml` file in the Project window to open the **UI Builder**. This allows you to see the layout and styles (`MainStyle.uss`) in real-time.
-- **Troubleshooting**: If buttons don't click, ensure your scene has an **EventSystem** (Right-click Hierarchy > UI > Event System), though UI Toolkit usually handles its own input.
+### AES Key Size Error
+Fixed. Ensure `SecureTokenStorage.cs` uses a 32-byte string for the AES-256 key.

@@ -5,7 +5,7 @@
             <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <ui:Label name="map-heading" text="Galaxy Map" class="label-important" style="font-size: 16px; margin: 0;" />
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <ui:Button name="view-galaxy-btn" text="GALAXY" class="button" style="height: 25px; margin: 0 5px; display: none;" />
+                    <ui:Button name="view-galaxy-btn" text="GALAXY" class="button" style="width: 70px; height: 25px; margin: 0 5px; visibility: hidden;" />
                     <ui:TextField name="system-search" placeholder-text="Search..." style="width: 120px; height: 25px; font-size: 11px;" />
                     <ui:VisualElement style="flex-direction: row; align-items: center; margin-left: 5px;">
                         <ui:Button name="prev-page" text="&lt;" class="button" style="width: 25px; height: 25px; margin: 0; padding: 0;" />
@@ -22,7 +22,8 @@
             <ui:Label name="selected-system-title" text="Select a System" class="label-important" style="margin-bottom: 2px;" />
             
             <ui:VisualElement name="map-container" class="system-map">
-                <!-- Waypoints will be generated here -->
+                <!-- Layers -->
+                <ui:VisualElement name="waypoints-layer" style="position: absolute; width: 100%; height: 100%;" />
                 
                 <!-- Floating Legend -->
                 <ui:VisualElement name="map-legend" style="position: absolute; bottom: 10; right: 10; background-color: rgba(30, 30, 30, 0.9); border-radius: 5px; border-width: 1px; border-color: rgb(60, 60, 60); padding: 5px; max-width: 180px;">
