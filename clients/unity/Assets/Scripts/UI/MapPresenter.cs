@@ -744,41 +744,29 @@ namespace SpaceTraders.UI
             if (_currentSystem == null) return;
             if (_currentSystem.Waypoints == null || _currentSystem.Waypoints.Count == 0) return;
 
-            float scale = SystemScale; // Base scale for system coordinates
+            UpdateSystemWaypointLabels();
+        }
 
-            foreach (var wp in _currentSystem.Waypoints)
+        private void UpdateSystemWaypointLabels()
+        {
+            if (_labelContainer == null || _currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0)
             {
-                if (waypointIconTemplate == null) continue;
+                return;
+            }
 
-                Vector2 basePos = new Vector2(wp.X, wp.Y) * scale;
-                Vector2 screenPos = WorldToScreen(basePos);
+            const float showAllThreshold = 0.55f;
+            bool showAllLabels = MapZoom > showAllThreshold;
 
-                var icon = waypointIconTemplate.Instantiate();
-                var iconRoot = icon.Q<VisualElement>("waypoint-root") ?? icon;
-                bool selected = wp.Symbol == _selectedSymbol;
-                icon.style.position = Position.Absolute;
-                icon.style.left = screenPos.x;
-                icon.style.top = screenPos.y;
-                
-                // Waypoint Type Colors (Adding classes defined in MainStyle.uss)
-                iconRoot.AddToClassList($"wp-{wp.Type.ToString().ToLower()}");
-                if (selected)
+            foreach (var waypoint in _currentSystem.Waypoints)
+            {
+                if (!showAllLabels && waypoint.Symbol != _selectedSymbol)
                 {
-                    icon.style.scale = new Scale(new Vector3(1.15f, 1.15f, 1f));
-                    icon.style.unityBackgroundImageTintColor = Color.cyan;
-                }
-                icon.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(wp));
-
-                var tooltip = icon.Q<Label>("waypoint-name") ?? icon.Q<Label>("Tooltip") ?? icon.Q<Label>("tooltip-label");
-                if (tooltip != null)
-                {
-                    tooltip.text = wp.Symbol;
-                    tooltip.style.display = DisplayStyle.None;
-                    icon.RegisterCallback<MouseEnterEvent>(evt => tooltip.style.display = DisplayStyle.Flex);
-                    icon.RegisterCallback<MouseLeaveEvent>(evt => tooltip.style.display = DisplayStyle.None);
+                    continue;
                 }
 
-                targetLayer.Add(icon);
+                Vector2 pos = WorldToScreen(GetSystemWaypointWorldPosition(waypoint));
+                var color = waypoint.Symbol == _selectedSymbol ? Color.cyan : Color.white;
+                _labelContainer.Add(GetLabelFromPool(waypoint.Symbol, pos, color));
             }
         }
 
@@ -1059,7 +1047,123 @@ namespace SpaceTraders.UI
             else
             {
                 DrawSystemOrbitRings(painter, rect);
+                DrawSystemWaypoints(painter, rect);
             }
+        }
+
+        private void DrawSystemWaypoints(Painter2D painter, Rect rect)
+        {
+            if (_currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var waypoint in _currentSystem.Waypoints)
+            {
+                bool selected = waypoint.Symbol == _selectedSymbol;
+                string type = waypoint.Type.ToString();
+                Vector2 pos = WorldToScreen(GetSystemWaypointWorldPosition(waypoint));
+                float radius = selected ? 4.5f : 3.5f;
+
+                if (!rect.Overlaps(new Rect(pos.x - radius, pos.y - radius, radius * 2f, radius * 2f)))
+                {
+                    continue;
+                }
+
+                Color fillColor = selected ? Color.cyan : GetWaypointColor(type);
+                Color strokeColor = selected ? Color.white : new Color(0.92f, 0.92f, 0.92f, 0.85f);
+                float lineWidth = selected ? 1.5f : 1f;
+
+                DrawWaypointShape(painter, pos, radius, type, fillColor, strokeColor, lineWidth);
+            }
+        }
+
+        private void DrawWaypointShape(Painter2D painter, Vector2 pos, float radius, string type, Color fillColor, Color strokeColor, float lineWidth)
+        {
+            if (type == "ORBITAL_STATION")
+            {
+                DrawWaypointPolygon(
+                    painter,
+                    new[]
+                    {
+                        new Vector2(pos.x - radius, pos.y - radius),
+                        new Vector2(pos.x + radius, pos.y - radius),
+                        new Vector2(pos.x + radius, pos.y + radius),
+                        new Vector2(pos.x - radius, pos.y + radius)
+                    },
+                    fillColor,
+                    strokeColor,
+                    lineWidth);
+                return;
+            }
+
+            if (type == "ASTEROID_FIELD")
+            {
+                DrawWaypointPolygon(
+                    painter,
+                    new[]
+                    {
+                        new Vector2(pos.x, pos.y - radius),
+                        new Vector2(pos.x + radius, pos.y + radius),
+                        new Vector2(pos.x - radius, pos.y + radius)
+                    },
+                    fillColor,
+                    strokeColor,
+                    lineWidth);
+                return;
+            }
+
+            if (type == "JUMP_GATE")
+            {
+                DrawWaypointPolygon(
+                    painter,
+                    new[]
+                    {
+                        new Vector2(pos.x, pos.y - radius),
+                        new Vector2(pos.x + radius, pos.y),
+                        new Vector2(pos.x, pos.y + radius),
+                        new Vector2(pos.x - radius, pos.y)
+                    },
+                    fillColor,
+                    strokeColor,
+                    lineWidth);
+
+                painter.fillColor = new Color(0.05f, 0.05f, 0.09f, 1f);
+                painter.BeginPath();
+                painter.Arc(pos, Mathf.Max(1f, radius * 0.45f), 0f, 360f);
+                painter.Fill();
+                return;
+            }
+
+            painter.fillColor = fillColor;
+            painter.strokeColor = strokeColor;
+            painter.lineWidth = lineWidth;
+            painter.BeginPath();
+            painter.Arc(pos, radius, 0f, 360f);
+            painter.Fill();
+            painter.Stroke();
+        }
+
+        private void DrawWaypointPolygon(Painter2D painter, IReadOnlyList<Vector2> points, Color fillColor, Color strokeColor, float lineWidth)
+        {
+            if (points == null || points.Count < 3)
+            {
+                return;
+            }
+
+            painter.fillColor = fillColor;
+            painter.strokeColor = strokeColor;
+            painter.lineWidth = lineWidth;
+
+            painter.BeginPath();
+            painter.MoveTo(points[0]);
+            for (int i = 1; i < points.Count; i++)
+            {
+                painter.LineTo(points[i]);
+            }
+            painter.LineTo(points[0]);
+            painter.Fill();
+            painter.Stroke();
         }
 
         private void DrawSystemOrbitRings(Painter2D painter, Rect rect)
