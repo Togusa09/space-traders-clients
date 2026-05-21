@@ -1,9 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <ui:VisualElement class="dashboard-entry" style="flex-direction: row; justify-content: space-between; align-items: center;">
-        <ui:VisualElement style="flex-grow: 1;">
-            <ui:Label name="symbol-label" text="Symbol: SYSTEM-SYMBOL" class="label-important" />
-            <ui:Label name="details-label" text="Type: TYPE | Waypoints: 0" />
-        </ui:VisualElement>
-        <ui:Button name="view-button" text="VIEW" class="button" style="width: 60px; height: 30px; margin: 0;" />
+    <ui:VisualElement class="dashboard-entry">
+        <ui:Label name="symbol-label" text="Symbol: SYSTEM-SYMBOL" class="label-important" />
+        <ui:Label name="details-label" text="Type: TYPE | Waypoints: 0" />
     </ui:VisualElement>
 </ui:UXML>

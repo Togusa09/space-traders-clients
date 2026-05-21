@@ -50,6 +50,7 @@ namespace SpaceTraders.UI
         private List<DatabaseManager.IndexedSystem> _allGalaxySystems;
         private List<DatabaseManager.IndexedSystem> _filteredSystems;
         private List<DatabaseManager.IndexedSystem> _pagedSystems;
+        private readonly List<VisualElement> _listEntries = new List<VisualElement>();
 
         private DatabaseManager _dbManager;
         private APIService _apiService;
@@ -298,6 +299,7 @@ namespace SpaceTraders.UI
         {
             if (_systemList == null) return;
             _systemList.Clear();
+            _listEntries.Clear();
 
             if (_filteredSystems == null)
             {
@@ -321,22 +323,25 @@ namespace SpaceTraders.UI
             {
                 if (systemEntryTemplate == null) continue;
                 var entry = systemEntryTemplate.Instantiate();
-                entry.name = $"list-{s.Symbol}";
-                entry.AddToClassList("selectable-entry");
+                var root = entry.Q<VisualElement>(null, "dashboard-entry") ?? entry;
+                root.name = $"list-{s.Symbol}";
+                root.AddToClassList("selectable-entry");
                 
                 var symbolLabel = entry.Q<Label>("symbol-label");
                 var detailsLabel = entry.Q<Label>("details-label");
                 
                 if (symbolLabel != null) symbolLabel.text = s.Symbol;
                 if (detailsLabel != null) detailsLabel.text = $"{s.Type} | {s.X},{s.Y}";
-                
-                // Remove the "VIEW" button if it exists, and make the whole entry clickable
-                var btn = entry.Q<Button>("view-button");
-                if (btn != null) btn.style.display = DisplayStyle.None;
 
-                entry.RegisterCallback<ClickEvent>(evt => SelectSystem(s.Symbol, entry));
+                if (s.Symbol == _selectedSymbol)
+                {
+                    root.AddToClassList("selected-entry");
+                }
+
+                root.RegisterCallback<ClickEvent>(evt => SelectSystem(s.Symbol, root));
                 
                 _systemList.Add(entry);
+                _listEntries.Add(root);
             }
         }
 
@@ -364,10 +369,12 @@ namespace SpaceTraders.UI
             _selectedSymbol = symbol;
 
             // Handle UI selection state
-            if (_systemList != null)
+            foreach (var listEntry in _listEntries)
             {
-                foreach (var child in _systemList.Children()) child.RemoveFromClassList("selected-entry");
+                listEntry.RemoveFromClassList("selected-entry");
             }
+
+            entry ??= _systemList?.Q<VisualElement>($"list-{symbol}");
             entry?.AddToClassList("selected-entry");
 
             if (_selectedSystemLabel != null) _selectedSystemLabel.text = $"System: {symbol}";
