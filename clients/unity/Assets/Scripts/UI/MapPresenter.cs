@@ -46,6 +46,7 @@ namespace SpaceTraders.UI
         private Label _wpCoordsLabel;
         private Label _wpDescLabel;
         private Label _extraInfoTitleLabel;
+        private VisualElement _extraContentContainer;
 
         private List<DatabaseManager.IndexedSystem> _allGalaxySystems;
         private List<DatabaseManager.IndexedSystem> _filteredSystems;
@@ -112,6 +113,7 @@ namespace SpaceTraders.UI
             _wpCoordsLabel = panel.Q<Label>("wp-coords");
             _wpDescLabel = panel.Q<Label>("wp-desc");
             _extraInfoTitleLabel = panel.Q<Label>("extra-info-title");
+            _extraContentContainer = panel.Q<VisualElement>("extra-content-container");
 
             // Create Label Layer
             _labelContainer = new VisualElement { style = { position = Position.Absolute, width = Length.Percent(100), height = Length.Percent(100) }, pickingMode = PickingMode.Ignore };
@@ -431,11 +433,51 @@ namespace SpaceTraders.UI
                     root.AddToClassList("selected-entry");
                 }
 
-                root.RegisterCallback<ClickEvent>(evt => SelectSystem(s.Symbol, root));
+                root.RegisterCallback<ClickEvent>(evt => SelectGalaxySystem(s, root));
                 
                 _systemList.Add(entry);
                 _listEntries.Add(root);
             }
+        }
+
+        private void SelectGalaxySystem(DatabaseManager.IndexedSystem system, VisualElement entry = null)
+        {
+            if (system == null) return;
+
+            _selectedSymbol = system.Symbol;
+            _selectedWaypoint = null;
+
+            foreach (var listEntry in _listEntries)
+            {
+                listEntry.RemoveFromClassList("selected-entry");
+            }
+
+            entry ??= _systemList?.Q<VisualElement>($"list-{system.Symbol}");
+            entry?.AddToClassList("selected-entry");
+
+            if (_selectedSystemLabel != null)
+            {
+                _selectedSystemLabel.text = $"System: {system.Symbol}";
+            }
+
+            if (_wpSymbolLabel != null) _wpSymbolLabel.text = system.Symbol;
+            if (_wpTypeLabel != null) _wpTypeLabel.text = system.Type;
+            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"{system.X}, {system.Y}";
+            if (_wpDescLabel != null) _wpDescLabel.text = "Selected system. Use OPEN SYSTEM to view waypoints.";
+
+            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "Actions";
+            if (_extraContentContainer != null)
+            {
+                _extraContentContainer.Clear();
+                var openButton = new Button(() => SelectSystem(system.Symbol, entry)) { text = "OPEN SYSTEM" };
+                openButton.AddToClassList("button");
+                openButton.style.width = 150;
+                openButton.style.height = 30;
+                _extraContentContainer.Add(openButton);
+            }
+
+            UpdateModeChrome();
+            RefreshMapUI();
         }
 
         private void PopulateWaypointHierarchyList()
@@ -594,8 +636,6 @@ namespace SpaceTraders.UI
                         {
                             SelectWaypoint(wpsRes.Data[0]);
                         }
-
-                        PopulateWaypointList(symbol, wpsRes.Data.ToArray());
                     }
                 }
             }
@@ -639,12 +679,13 @@ namespace SpaceTraders.UI
                 Vector2 screenPos = basePos * MapZoom + MapOffset;
 
                 var icon = waypointIconTemplate.Instantiate();
+                var iconRoot = icon.Q<VisualElement>("waypoint-root") ?? icon;
                 icon.style.position = Position.Absolute;
                 icon.style.left = screenPos.x;
                 icon.style.top = screenPos.y;
                 
                 // Waypoint Type Colors (Adding classes defined in MainStyle.uss)
-                icon.AddToClassList($"wp-{wp.Type.ToString().ToLower()}");
+                iconRoot.AddToClassList($"wp-{wp.Type.ToString().ToLower()}");
                 icon.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(wp));
 
                 var tooltip = icon.Q<Label>("waypoint-name") ?? icon.Q<Label>("Tooltip") ?? icon.Q<Label>("tooltip-label");
@@ -678,7 +719,7 @@ namespace SpaceTraders.UI
                 return;
             }
 
-            float showAllThreshold = 3.5f;
+            float showAllThreshold = 0.45f;
             bool showAllLabels = MapZoom > showAllThreshold;
 
             foreach (var system in _filteredSystems)
@@ -725,7 +766,8 @@ namespace SpaceTraders.UI
             var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
             selectedListEntry?.AddToClassList("selected-entry");
 
-            ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Detailed waypoint traits are not available for indexed systems.");
+            ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Waypoint selected.");
+            _ = LoadSpecializedInfo(waypoint.Symbol, waypoint.Type.ToString());
             RefreshMapUI();
         }
 
@@ -747,6 +789,7 @@ namespace SpaceTraders.UI
                 ? string.Join(", ", waypoint.Traits.Select(t => t.Symbol.ToString().Replace("_", " ")))
                 : "No traits available.";
             ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, traitSummary);
+            _ = LoadSpecializedInfo(waypoint.Symbol, waypoint.Type.ToString());
             RefreshMapUI();
         }
 
@@ -760,6 +803,89 @@ namespace SpaceTraders.UI
             if (_extraInfoTitleLabel != null)
             {
                 _extraInfoTitleLabel.text = $"Specialized Info: {symbol}";
+            }
+
+            _extraContentContainer?.Clear();
+        }
+
+        private async Task LoadSpecializedInfo(string waypointSymbol, string waypointType)
+        {
+            if (_apiService == null || _extraContentContainer == null || _currentSystem == null)
+            {
+                return;
+            }
+
+            _extraContentContainer.Clear();
+            var status = new Label("Loading specialized info...");
+            _extraContentContainer.Add(status);
+
+            try
+            {
+                var systemSymbol = _currentSystem.Symbol;
+                _extraContentContainer.Clear();
+
+                if (waypointType == "JUMP_GATE")
+                {
+                    var jumpGate = await _apiService.GetJumpGate(systemSymbol, waypointSymbol);
+                    if (jumpGate?.Data?.Connections != null && jumpGate.Data.Connections.Count > 0)
+                    {
+                        foreach (var connection in jumpGate.Data.Connections)
+                        {
+                            _extraContentContainer.Add(new Label($"- {connection}"));
+                        }
+                    }
+                    else
+                    {
+                        _extraContentContainer.Add(new Label("No jump connections available."));
+                    }
+                }
+                else
+                {
+                    bool anyData = false;
+
+                    try
+                    {
+                        var market = await _apiService.GetMarket(systemSymbol, waypointSymbol);
+                        if (market?.Data != null)
+                        {
+                            anyData = true;
+                            _extraContentContainer.Add(new Label("Marketplace available."));
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var shipyard = await _apiService.GetShipyard(systemSymbol, waypointSymbol);
+                        if (shipyard?.Data != null)
+                        {
+                            anyData = true;
+                            _extraContentContainer.Add(new Label("Shipyard available."));
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var construction = await _apiService.GetConstruction(systemSymbol, waypointSymbol);
+                        if (construction?.Data != null)
+                        {
+                            anyData = true;
+                            _extraContentContainer.Add(new Label("Construction site data available."));
+                        }
+                    }
+                    catch { }
+
+                    if (!anyData)
+                    {
+                        _extraContentContainer.Add(new Label("No specialized info available."));
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _extraContentContainer.Clear();
+                _extraContentContainer.Add(new Label($"Failed to load specialized info: {e.Message}"));
             }
         }
 
@@ -868,37 +994,6 @@ namespace SpaceTraders.UI
             painter.Stroke();
         }
 
-        private void PopulateWaypointList(string systemSymbol, Waypoint[] waypoints)
-        {
-            if (_waypointList == null) return;
-            _waypointList.Clear();
-
-            foreach (var wp in waypoints)
-            {
-                var container = new VisualElement { style = { 
-                    flexDirection = FlexDirection.Row, 
-                    justifyContent = Justify.SpaceBetween,
-                    paddingBottom = 4,
-                    borderBottomWidth = 1,
-                    borderBottomColor = Color.gray
-                }};
-
-                var info = new Label($"{wp.Symbol} ({wp.Type}) @ {wp.X},{wp.Y}");
-                info.RegisterCallback<ClickEvent>(_ => SelectWaypoint(wp));
-                container.Add(info);
-
-                var actions = new VisualElement { style = { flexDirection = FlexDirection.Row }};
-                
-                var btnInspect = new Button { text = "INSPECT" };
-                btnInspect.clicked += () => InspectWaypoint(systemSymbol, wp.Symbol);
-                actions.Add(btnInspect);
-
-                container.Add(actions);
-                container.RegisterCallback<ClickEvent>(_ => SelectWaypoint(wp));
-                _waypointList.Add(container);
-            }
-        }
-
         private void RefreshLegend()
         {
             if (_legendItems == null) return;
@@ -968,6 +1063,34 @@ namespace SpaceTraders.UI
             };
         }
 
+
+                    private void HandleMapClick(Vector2 localPosition)
+                    {
+                        if (_mapMode != MapMode.Galaxy || _filteredSystems == null || _filteredSystems.Count == 0)
+                        {
+                            return;
+                        }
+
+                        Vector2 worldPos = (localPosition - MapOffset) / MapZoom;
+                        DatabaseManager.IndexedSystem closest = null;
+                        float closestDistance = float.MaxValue;
+
+                        foreach (var system in _filteredSystems)
+                        {
+                            float distance = Vector2.Distance(new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale), worldPos);
+                            if (distance < closestDistance && distance < (14f / Mathf.Max(MapZoom, 0.01f)))
+                            {
+                                closestDistance = distance;
+                                closest = system;
+                            }
+                        }
+
+                        if (closest != null)
+                        {
+                            var listEntry = _systemList?.Q<VisualElement>($"list-{closest.Symbol}");
+                            SelectGalaxySystem(closest, listEntry);
+                        }
+                    }
         private string NormalizeSystemTypeKey(string type)
         {
             if (string.IsNullOrEmpty(type)) return string.Empty;
@@ -1049,6 +1172,13 @@ namespace SpaceTraders.UI
 
             private void OnPointerDown(PointerDownEvent evt)
             {
+                if (evt.button == 0)
+                {
+                    _presenter.HandleMapClick(evt.localPosition);
+                    evt.StopPropagation();
+                    return;
+                }
+
                 if (evt.button == 1 || evt.button == 2) // Right or Middle click for pan
                 {
                     _active = true;
