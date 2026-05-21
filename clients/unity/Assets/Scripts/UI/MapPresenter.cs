@@ -75,6 +75,7 @@ namespace SpaceTraders.UI
         private bool _legendExpanded = true;
         private const float GalaxyScale = 6f;
         private const float SystemScale = 5f;
+        private const float SelectionScreenRadius = 14f;
 
         [Inject]
         public void Construct(DatabaseManager dbManager, APIService apiService)
@@ -333,7 +334,7 @@ namespace SpaceTraders.UI
                 var systems = _filteredSystems;
                 if (systems != null && systems.Count > 0)
                 {
-                    FitBounds(systems.Select(s => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale)), rect);
+                    FitBounds(systems.Select(GetGalaxySystemWorldPosition), rect);
                 }
                 else
                 {
@@ -345,7 +346,7 @@ namespace SpaceTraders.UI
             {
                 if (_currentSystem?.Waypoints != null && _currentSystem.Waypoints.Count > 0)
                 {
-                    FitBounds(_currentSystem.Waypoints.Select(w => new Vector2(w.X * SystemScale, w.Y * SystemScale)), rect);
+                    FitBounds(_currentSystem.Waypoints.Select(GetSystemWaypointWorldPosition), rect);
                 }
                 else
                 {
@@ -397,6 +398,31 @@ namespace SpaceTraders.UI
 
             var center = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
             MapOffset = new Vector2(rect.width * 0.5f, rect.height * 0.5f) - (center * MapZoom);
+        }
+
+        private Vector2 GetGalaxySystemWorldPosition(DatabaseManager.IndexedSystem system)
+        {
+            return new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale);
+        }
+
+        private Vector2 GetSystemWaypointWorldPosition(SystemWaypoint waypoint)
+        {
+            return new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale);
+        }
+
+        private Vector2 GetWaypointWorldPosition(Waypoint waypoint)
+        {
+            return new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale);
+        }
+
+        private Vector2 WorldToScreen(Vector2 worldPosition)
+        {
+            return worldPosition * MapZoom + MapOffset;
+        }
+
+        private Vector2 ScreenToWorld(Vector2 localPosition)
+        {
+            return (localPosition - MapOffset) / Mathf.Max(MapZoom, 0.0001f);
         }
 
         private void PopulateSystemList()
@@ -505,7 +531,7 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
-                CenterMapOnWorldPosition(new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale));
+                CenterMapOnWorldPosition(GetGalaxySystemWorldPosition(system));
             }
 
             UpdateModeChrome();
@@ -725,7 +751,7 @@ namespace SpaceTraders.UI
                 if (waypointIconTemplate == null) continue;
 
                 Vector2 basePos = new Vector2(wp.X, wp.Y) * scale;
-                Vector2 screenPos = basePos * MapZoom + MapOffset;
+                Vector2 screenPos = WorldToScreen(basePos);
 
                 var icon = waypointIconTemplate.Instantiate();
                 var iconRoot = icon.Q<VisualElement>("waypoint-root") ?? icon;
@@ -785,7 +811,7 @@ namespace SpaceTraders.UI
                     continue;
                 }
 
-                Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
+                Vector2 pos = WorldToScreen(GetGalaxySystemWorldPosition(system));
                 var color = system.Symbol == selectedGalaxySymbol ? Color.cyan : Color.white;
                 _labelContainer.Add(GetLabelFromPool(system.Symbol, pos, color));
             }
@@ -824,7 +850,7 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.System)
             {
-                CenterMapOnWorldPosition(new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale));
+                CenterMapOnWorldPosition(GetSystemWaypointWorldPosition(waypoint));
             }
 
             ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Waypoint selected.");
@@ -848,7 +874,7 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.System)
             {
-                CenterMapOnWorldPosition(new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale));
+                CenterMapOnWorldPosition(GetWaypointWorldPosition(waypoint));
             }
 
             var traitSummary = waypoint.Traits != null && waypoint.Traits.Count > 0
@@ -1078,7 +1104,7 @@ namespace SpaceTraders.UI
                     continue;
                 }
 
-                Vector2 center = parentWorld * MapZoom + MapOffset;
+                Vector2 center = WorldToScreen(parentWorld);
                 float radius = radiusWorld * MapZoom;
 
                 if (!rect.Overlaps(new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f)))
@@ -1152,8 +1178,8 @@ namespace SpaceTraders.UI
                 if (!_galaxySystemLookup.TryGetValue(fromSys, out var from)) continue;
                 if (!_galaxySystemLookup.TryGetValue(toSys, out var to)) continue;
 
-                Vector2 a = new Vector2(from.X * GalaxyScale, from.Y * GalaxyScale) * MapZoom + MapOffset;
-                Vector2 b = new Vector2(to.X * GalaxyScale, to.Y * GalaxyScale) * MapZoom + MapOffset;
+                Vector2 a = WorldToScreen(GetGalaxySystemWorldPosition(from));
+                Vector2 b = WorldToScreen(GetGalaxySystemWorldPosition(to));
 
                 // Viewport cull: skip if both endpoints are outside the rect.
                 if (!rect.Contains(a) && !rect.Contains(b)) continue;
@@ -1176,7 +1202,7 @@ namespace SpaceTraders.UI
 
             foreach (var system in _filteredSystems)
             {
-                Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
+                Vector2 pos = WorldToScreen(GetGalaxySystemWorldPosition(system));
                 if (!rect.Contains(pos))
                 {
                     continue;
@@ -1284,35 +1310,77 @@ namespace SpaceTraders.UI
                 _ => Color.white
             };
         }
+        private void HandleMapClick(Vector2 localPosition)
+        {
+            float maxWorldDistance = SelectionScreenRadius / Mathf.Max(MapZoom, 0.01f);
+            Vector2 worldPosition = ScreenToWorld(localPosition);
 
+            if (_mapMode == MapMode.Galaxy)
+            {
+                var closestSystem = FindClosestGalaxySystem(worldPosition, maxWorldDistance);
+                if (closestSystem != null)
+                {
+                    var listEntry = _systemList?.Q<VisualElement>($"list-{closestSystem.Symbol}");
+                    SelectGalaxySystem(closestSystem, listEntry);
+                }
+                return;
+            }
 
-                    private void HandleMapClick(Vector2 localPosition)
-                    {
-                        if (_mapMode != MapMode.Galaxy || _filteredSystems == null || _filteredSystems.Count == 0)
-                        {
-                            return;
-                        }
+            if (_mapMode == MapMode.System)
+            {
+                var closestWaypoint = FindClosestSystemWaypoint(worldPosition, maxWorldDistance);
+                if (closestWaypoint != null)
+                {
+                    SelectSystemWaypoint(closestWaypoint);
+                }
+            }
+        }
 
-                        Vector2 worldPos = (localPosition - MapOffset) / MapZoom;
-                        DatabaseManager.IndexedSystem closest = null;
-                        float closestDistance = float.MaxValue;
+        private DatabaseManager.IndexedSystem FindClosestGalaxySystem(Vector2 worldPosition, float maxWorldDistance)
+        {
+            if (_filteredSystems == null || _filteredSystems.Count == 0)
+            {
+                return null;
+            }
 
-                        foreach (var system in _filteredSystems)
-                        {
-                            float distance = Vector2.Distance(new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale), worldPos);
-                            if (distance < closestDistance && distance < (14f / Mathf.Max(MapZoom, 0.01f)))
-                            {
-                                closestDistance = distance;
-                                closest = system;
-                            }
-                        }
+            DatabaseManager.IndexedSystem closest = null;
+            float closestDistance = maxWorldDistance;
 
-                        if (closest != null)
-                        {
-                            var listEntry = _systemList?.Q<VisualElement>($"list-{closest.Symbol}");
-                            SelectGalaxySystem(closest, listEntry);
-                        }
-                    }
+            foreach (var system in _filteredSystems)
+            {
+                float distance = Vector2.Distance(GetGalaxySystemWorldPosition(system), worldPosition);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closest = system;
+                }
+            }
+
+            return closest;
+        }
+
+        private SystemWaypoint FindClosestSystemWaypoint(Vector2 worldPosition, float maxWorldDistance)
+        {
+            if (_currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0)
+            {
+                return null;
+            }
+
+            SystemWaypoint closest = null;
+            float closestDistance = maxWorldDistance;
+
+            foreach (var waypoint in _currentSystem.Waypoints)
+            {
+                float distance = Vector2.Distance(GetSystemWaypointWorldPosition(waypoint), worldPosition);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closest = waypoint;
+                }
+            }
+
+            return closest;
+        }
         private string NormalizeSystemTypeKey(string type)
         {
             if (string.IsNullOrEmpty(type)) return string.Empty;
