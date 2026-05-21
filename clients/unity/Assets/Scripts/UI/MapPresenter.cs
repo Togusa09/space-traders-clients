@@ -63,10 +63,14 @@ namespace SpaceTraders.UI
         public Vector2 MapOffset { get; set; } = Vector2.zero;
         public float MapZoom { get; set; } = 1.0f;
         private bool _mapInitialized = false;
+        private float _minZoom = 0.01f;
+        private float _maxZoom = 1000f;
         private MapMode _mapMode = MapMode.Galaxy;
         private int _currentPage = 1;
         private const int PageSize = 50;
         private bool _legendExpanded = true;
+        private const float GalaxyScale = 6f;
+        private const float SystemScale = 5f;
 
         [Inject]
         public void Construct(DatabaseManager dbManager, APIService apiService)
@@ -154,8 +158,9 @@ namespace SpaceTraders.UI
             ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
             _ = EnsureGalaxySystemsLoadedAsync();
 
-            PopulateLegend();
+            RefreshLegend();
             UpdateModeChrome();
+            ResetMapCamera();
             RefreshMapUI();
 
             Log.Info("[MapPresenter] Map panel setup complete.");
@@ -179,6 +184,7 @@ namespace SpaceTraders.UI
             }
 
             UpdateModeChrome();
+            ResetMapCamera();
             RefreshMapUI();
         }
 
@@ -192,6 +198,13 @@ namespace SpaceTraders.UI
             int totalPages = Mathf.Max(1, Mathf.CeilToInt((float)_filteredSystems.Count / PageSize));
             _currentPage = Mathf.Clamp(_currentPage + delta, 1, totalPages);
             PopulateSystemList();
+            RefreshLegend();
+
+            if (_mapMode == MapMode.Galaxy)
+            {
+                ResetMapCamera();
+                RefreshMapUI();
+            }
         }
 
         private void ToggleLegend()
@@ -224,6 +237,7 @@ namespace SpaceTraders.UI
 
             _currentPage = 1;
             PopulateSystemList();
+            RefreshLegend();
         }
 
         private async Task EnsureGalaxySystemsLoadedAsync()
@@ -275,6 +289,10 @@ namespace SpaceTraders.UI
                     _allGalaxySystems = loadedSystems;
                     _dbManager?.StoreSystems(loadedSystems);
                     ApplySystemFilter(_searchField != null ? _searchField.value : string.Empty);
+                    if (_mapMode == MapMode.Galaxy)
+                    {
+                        ResetMapCamera();
+                    }
                     RefreshMapUI();
                 }
             }
@@ -287,12 +305,80 @@ namespace SpaceTraders.UI
         private void ResetMapCamera()
         {
             if (_mapContainer == null) return;
-            var rect = _mapContainer.layout;
+            var rect = _mapContainer.contentRect;
             if (float.IsNaN(rect.width) || rect.width <= 0) return;
 
-            MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
-            MapZoom = 1.0f;
+            ConfigureZoomLimits();
+
+            if (_mapMode == MapMode.Galaxy)
+            {
+                var systems = _pagedSystems != null && _pagedSystems.Count > 0 ? _pagedSystems : _filteredSystems;
+                if (systems != null && systems.Count > 0)
+                {
+                    FitBounds(systems.Select(s => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale)), rect);
+                }
+                else
+                {
+                    MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
+                    MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
+                }
+            }
+            else
+            {
+                if (_currentSystem?.Waypoints != null && _currentSystem.Waypoints.Count > 0)
+                {
+                    FitBounds(_currentSystem.Waypoints.Select(w => new Vector2(w.X * SystemScale, w.Y * SystemScale)), rect);
+                }
+                else
+                {
+                    MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
+                    MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
+                }
+            }
+
             _mapInitialized = true;
+        }
+
+        private void ConfigureZoomLimits()
+        {
+            if (_mapMode == MapMode.Galaxy)
+            {
+                _minZoom = 0.001f;
+                _maxZoom = 250f;
+            }
+            else
+            {
+                _minZoom = 0.02f;
+                _maxZoom = 500f;
+            }
+
+            MapZoom = Mathf.Clamp(MapZoom, _minZoom, _maxZoom);
+        }
+
+        private void FitBounds(IEnumerable<Vector2> points, Rect rect)
+        {
+            var pointList = points.ToList();
+            if (pointList.Count == 0)
+            {
+                MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
+                MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
+                return;
+            }
+
+            float minX = pointList.Min(p => p.x);
+            float maxX = pointList.Max(p => p.x);
+            float minY = pointList.Min(p => p.y);
+            float maxY = pointList.Max(p => p.y);
+
+            float boundsWidth = Mathf.Max(1f, maxX - minX);
+            float boundsHeight = Mathf.Max(1f, maxY - minY);
+            float zoomX = (rect.width * 0.8f) / boundsWidth;
+            float zoomY = (rect.height * 0.8f) / boundsHeight;
+
+            MapZoom = Mathf.Clamp(Mathf.Min(zoomX, zoomY), _minZoom, _maxZoom);
+
+            var center = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
+            MapOffset = new Vector2(rect.width * 0.5f, rect.height * 0.5f) - (center * MapZoom);
         }
 
         private void PopulateSystemList()
@@ -396,6 +482,7 @@ namespace SpaceTraders.UI
                     }
 
                     UpdateModeChrome();
+                    ResetMapCamera();
                     RefreshMapUI();
                     
                     var wpsRes = await _apiService.GetSystemWaypoints(symbol);
@@ -440,7 +527,7 @@ namespace SpaceTraders.UI
 
             if (_currentSystem == null) return;
 
-            float scale = 5f; // Base scale for system coordinates
+            float scale = SystemScale; // Base scale for system coordinates
 
             foreach (var wp in _currentSystem.Waypoints)
             {
@@ -481,7 +568,7 @@ namespace SpaceTraders.UI
 
             if (_pagedSystems == null || _pagedSystems.Count == 0) return;
 
-            float scale = 6f;
+            float scale = GalaxyScale;
 
             foreach (var system in _pagedSystems)
             {
@@ -567,6 +654,9 @@ namespace SpaceTraders.UI
             {
                 _legendContent.style.display = _legendExpanded ? DisplayStyle.Flex : DisplayStyle.None;
             }
+
+            ConfigureZoomLimits();
+            RefreshLegend();
         }
 
         private void OnGenerateVisualContent(MeshGenerationContext mgc)
@@ -646,28 +736,65 @@ namespace SpaceTraders.UI
             }
         }
 
-        private void PopulateLegend()
+        private void RefreshLegend()
         {
             if (_legendItems == null) return;
             _legendItems.Clear();
 
-            var types = Enum.GetNames(typeof(WaypointType));
-            foreach (var type in types)
+            if (_mapMode == MapMode.Galaxy)
             {
-                var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 2 }};
-                var bullet = new VisualElement { style = { width = 8, height = 8, backgroundColor = Color.cyan, marginRight = 5 }};
-                
-                // Approximate color based on type (Logic from original MapPresenter)
-                bullet.style.backgroundColor = GetWaypointColor(type);
-                bullet.style.borderTopLeftRadius = 4; bullet.style.borderTopRightRadius = 4;
-                bullet.style.borderBottomLeftRadius = 4; bullet.style.borderBottomRightRadius = 4;
-                
-                var label = new Label(type.Replace("_", " ")) { style = { fontSize = 9, color = Color.gray }};
-                row.Add(bullet);
-                row.Add(label);
-                _legendItems.Add(row);
+                var typeSet = (_pagedSystems ?? _filteredSystems ?? new List<DatabaseManager.IndexedSystem>())
+                    .Select(s => s.Type)
+                    .Distinct()
+                    .OrderBy(t => t);
+
+                foreach (var type in typeSet)
+                {
+                    AddLegendRow(type, GetSystemColor(type));
+                }
+            }
+            else
+            {
+                var typeSet = (_currentSystem?.Waypoints ?? new List<SystemWaypoint>())
+                    .Select(w => w.Type.ToString())
+                    .Distinct()
+                    .OrderBy(t => t);
+
+                foreach (var type in typeSet)
+                {
+                    AddLegendRow(type, GetWaypointColor(type));
+                }
             }
         }
+
+        private void AddLegendRow(string type, Color color)
+        {
+            if (_legendItems == null) return;
+
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 2 } };
+            var bullet = new VisualElement { style = { width = 8, height = 8, marginRight = 5 } };
+            bullet.style.backgroundColor = color;
+            bullet.style.borderTopLeftRadius = 4;
+            bullet.style.borderTopRightRadius = 4;
+            bullet.style.borderBottomLeftRadius = 4;
+            bullet.style.borderBottomRightRadius = 4;
+
+            var label = new Label(type.Replace("_", " ")) { style = { fontSize = 9, color = Color.gray } };
+            row.Add(bullet);
+            row.Add(label);
+            _legendItems.Add(row);
+        }
+
+        private Color GetSystemColor(string type) => type switch
+        {
+            "RED_STAR" => new Color(1f, 0.3f, 0.3f),
+            "BLUE_STAR" => new Color(0.3f, 0.6f, 1f),
+            "YOUNG_STAR" => new Color(0.6f, 1f, 1f),
+            "NEBULA" => new Color(1f, 0.5f, 1f),
+            "BLACK_HOLE" => new Color(0.2f, 0.2f, 0.2f),
+            "HYPERGIANT" => new Color(1f, 0.6f, 0.2f),
+            _ => Color.white
+        };
 
         private Color GetWaypointColor(string type) => type switch {
             "PLANET" => new Color(0, 0.6f, 1f),
@@ -761,7 +888,7 @@ namespace SpaceTraders.UI
             {
                 float delta = -evt.delta.y * 0.1f;
                 float oldZoom = _presenter.MapZoom;
-                _presenter.MapZoom = Mathf.Clamp(_presenter.MapZoom * (1f + delta), 0.1f, 10f);
+                _presenter.MapZoom = Mathf.Clamp(_presenter.MapZoom * (1f + delta), _presenter._minZoom, _presenter._maxZoom);
                 
                 Vector2 mousePos = evt.localMousePosition;
                 Vector2 worldPos = (mousePos - _presenter.MapOffset) / oldZoom;
