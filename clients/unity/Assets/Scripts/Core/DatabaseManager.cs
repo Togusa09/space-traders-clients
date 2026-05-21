@@ -88,6 +88,7 @@ namespace SpaceTraders.Core
                 // Create tables
                 _db.CreateTable<ApiCacheEntry>();
                 _db.CreateTable<IndexedSystem>();
+                _db.CreateTable<IndexedJumpGate>();
                 
                 Log.Info("[DatabaseManager] SQLite initialized successfully.");
             }
@@ -149,6 +150,7 @@ namespace SpaceTraders.Core
             {
                 db.DeleteAll<ApiCacheEntry>();
                 db.DeleteAll<IndexedSystem>();
+                db.DeleteAll<IndexedJumpGate>();
                 Log.Info("[DatabaseManager] All cached data cleared.");
             }
             catch (Exception e)
@@ -211,6 +213,107 @@ namespace SpaceTraders.Core
             catch { return 0; }
         }
 
+        // --- Jump Gate Index ---
+
+        /// <summary>
+        /// Stores JUMP_GATE waypoint stubs (no connections yet). Uses InsertOrIgnore so
+        /// already-fetched records are never overwritten.
+        /// </summary>
+        public void StoreJumpGateWaypoints(IEnumerable<(string waypointSymbol, string systemSymbol)> waypoints)
+        {
+            var db = Connection;
+            if (db == null) return;
+            try
+            {
+                db.RunInTransaction(() =>
+                {
+                    foreach (var (wp, sys) in waypoints)
+                    {
+                        db.InsertOrIgnore(new IndexedJumpGate
+                        {
+                            WaypointSymbol = wp,
+                            SystemSymbol = sys,
+                            ConnectionsJson = null
+                        });
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                Log.Error("[DatabaseManager] StoreJumpGateWaypoints failed: {Error}", e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Persists the fetched connection list for a given JUMP_GATE waypoint.
+        /// </summary>
+        public void StoreJumpGateConnections(string waypointSymbol, List<string> connections)
+        {
+            var db = Connection;
+            if (db == null) return;
+            try
+            {
+                string json = connections != null
+                    ? string.Join(",", connections)
+                    : string.Empty;
+                db.Execute(
+                    "UPDATE jump_gate_index SET ConnectionsJson = ? WHERE WaypointSymbol = ?",
+                    json, waypointSymbol);
+            }
+            catch (Exception e)
+            {
+                Log.Error("[DatabaseManager] StoreJumpGateConnections failed: {Error}", e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Returns waypoints whose connection data has not yet been fetched.
+        /// </summary>
+        public List<IndexedJumpGate> GetPendingJumpGates()
+        {
+            var db = Connection;
+            if (db == null) return new List<IndexedJumpGate>();
+            try
+            {
+                return db.Table<IndexedJumpGate>()
+                    .Where(j => j.ConnectionsJson == null)
+                    .ToList();
+            }
+            catch (Exception e)
+            {
+                Log.Error("[DatabaseManager] GetPendingJumpGates failed: {Error}", e.Message);
+                return new List<IndexedJumpGate>();
+            }
+        }
+
+        /// <summary>
+        /// Returns all jump gate entries that have fetched connection data.
+        /// </summary>
+        public List<IndexedJumpGate> GetAllJumpGateConnections()
+        {
+            var db = Connection;
+            if (db == null) return new List<IndexedJumpGate>();
+            try
+            {
+                return db.Table<IndexedJumpGate>()
+                    .Where(j => j.ConnectionsJson != null)
+                    .ToList();
+            }
+            catch (Exception e)
+            {
+                Log.Error("[DatabaseManager] GetAllJumpGateConnections failed: {Error}", e.Message);
+                return new List<IndexedJumpGate>();
+            }
+        }
+
+        public int GetIndexedJumpGateCount()
+        {
+            var db = Connection;
+            if (db == null) return 0;
+            try { return db.Table<IndexedJumpGate>().Count(); }
+            catch { return 0; }
+        }
+
         private void OnDestroy()
         {
             _db?.Close();
@@ -235,6 +338,18 @@ namespace SpaceTraders.Core
             public int X { get; set; }
             public int Y { get; set; }
             public int WaypointCount { get; set; }
+        }
+
+        [Table("jump_gate_index")]
+        public class IndexedJumpGate
+        {
+            [PrimaryKey]
+            public string WaypointSymbol { get; set; }
+            public string SystemSymbol { get; set; }
+            /// <summary>
+            /// Comma-separated list of connected waypoint symbols, or null if not yet fetched.
+            /// </summary>
+            public string ConnectionsJson { get; set; }
         }
     }
 }
