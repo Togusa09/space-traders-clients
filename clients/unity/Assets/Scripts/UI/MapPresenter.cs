@@ -58,6 +58,7 @@ namespace SpaceTraders.UI
 
         private SpaceTraders.Generated.Model.System _currentSystem;
         private string _selectedSymbol;
+        private string _selectedSystemSymbol;
         private Waypoint _selectedWaypoint;
 
         // Map State for Panning/Zooming
@@ -179,16 +180,24 @@ namespace SpaceTraders.UI
             if (_mapMode == MapMode.System)
             {
                 _mapMode = MapMode.Galaxy;
+                if (!string.IsNullOrEmpty(_selectedSystemSymbol))
+                {
+                    _selectedSymbol = _selectedSystemSymbol;
+                }
+                UpdateModeChrome();
+                PopulateSystemList();
+                ResetMapCamera();
+                RefreshMapUI();
             }
-            else if (!string.IsNullOrEmpty(_selectedSymbol))
+            else
             {
-                _mapMode = MapMode.System;
+                // Entering system mode should load the selected system immediately.
+                var targetSystem = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
+                if (!string.IsNullOrEmpty(targetSystem))
+                {
+                    SelectSystem(targetSystem);
+                }
             }
-
-            UpdateModeChrome();
-            PopulateSystemList();
-            ResetMapCamera();
-            RefreshMapUI();
         }
 
         private void ChangePage(int delta)
@@ -428,7 +437,8 @@ namespace SpaceTraders.UI
                 if (symbolLabel != null) symbolLabel.text = s.Symbol;
                 if (detailsLabel != null) detailsLabel.text = $"{s.Type} | {s.X},{s.Y}";
 
-                if (s.Symbol == _selectedSymbol)
+                var selectedGalaxySymbol = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
+                if (s.Symbol == selectedGalaxySymbol)
                 {
                     root.AddToClassList("selected-entry");
                 }
@@ -445,7 +455,22 @@ namespace SpaceTraders.UI
             if (system == null) return;
 
             _selectedSymbol = system.Symbol;
+            _selectedSystemSymbol = system.Symbol;
             _selectedWaypoint = null;
+
+            if (_filteredSystems != null && _filteredSystems.Count > 0)
+            {
+                int selectedIndex = _filteredSystems.FindIndex(s => s.Symbol == system.Symbol);
+                if (selectedIndex >= 0)
+                {
+                    int selectedPage = (selectedIndex / PageSize) + 1;
+                    if (_currentPage != selectedPage)
+                    {
+                        _currentPage = selectedPage;
+                        PopulateSystemList();
+                    }
+                }
+            }
 
             foreach (var listEntry in _listEntries)
             {
@@ -463,17 +488,18 @@ namespace SpaceTraders.UI
             if (_wpSymbolLabel != null) _wpSymbolLabel.text = system.Symbol;
             if (_wpTypeLabel != null) _wpTypeLabel.text = system.Type;
             if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"{system.X}, {system.Y}";
-            if (_wpDescLabel != null) _wpDescLabel.text = "Selected system. Use OPEN SYSTEM to view waypoints.";
+            if (_wpDescLabel != null) _wpDescLabel.text = "Selected system. Click SYSTEM to open.";
 
-            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "Actions";
+            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "System Selection";
             if (_extraContentContainer != null)
             {
                 _extraContentContainer.Clear();
-                var openButton = new Button(() => SelectSystem(system.Symbol, entry)) { text = "OPEN SYSTEM" };
-                openButton.AddToClassList("button");
-                openButton.style.width = 150;
-                openButton.style.height = 30;
-                _extraContentContainer.Add(openButton);
+                _extraContentContainer.Add(new Label("Use the SYSTEM button to switch to waypoint view."));
+            }
+
+            if (_mapMode == MapMode.Galaxy)
+            {
+                CenterMapOnWorldPosition(new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale));
             }
 
             UpdateModeChrome();
@@ -596,6 +622,7 @@ namespace SpaceTraders.UI
         {
             Log.Info("[Map] Selecting system {Symbol}...", symbol);
             _selectedSymbol = symbol;
+            _selectedSystemSymbol = symbol;
 
             // Handle UI selection state
             foreach (var listEntry in _listEntries)
@@ -616,6 +643,7 @@ namespace SpaceTraders.UI
                 if (res != null && res.Data != null)
                 {
                     _currentSystem = res.Data;
+                    _currentSystem.Waypoints ??= new List<SystemWaypoint>();
                     _mapMode = MapMode.System;
                     _selectedWaypoint = null;
                     
@@ -632,10 +660,24 @@ namespace SpaceTraders.UI
                     var wpsRes = await _apiService.GetSystemWaypoints(symbol);
                     if (wpsRes != null && wpsRes.Data != null)
                     {
+                        _currentSystem.Waypoints = wpsRes.Data
+                            .Select(wp => new SystemWaypoint(
+                                symbol: wp.Symbol,
+                                type: wp.Type,
+                                x: wp.X,
+                                y: wp.Y,
+                                orbitals: wp.Orbitals ?? new List<WaypointOrbital>(),
+                                orbits: wp.Orbits))
+                            .ToList();
+
                         if (_selectedWaypoint == null && wpsRes.Data.Count > 0)
                         {
                             SelectWaypoint(wpsRes.Data[0]);
                         }
+
+                        PopulateSystemList();
+                        ResetMapCamera();
+                        RefreshMapUI();
                     }
                 }
             }
@@ -668,6 +710,7 @@ namespace SpaceTraders.UI
             _labelContainer.Clear();
 
             if (_currentSystem == null) return;
+            if (_currentSystem.Waypoints == null || _currentSystem.Waypoints.Count == 0) return;
 
             float scale = SystemScale; // Base scale for system coordinates
 
@@ -680,12 +723,18 @@ namespace SpaceTraders.UI
 
                 var icon = waypointIconTemplate.Instantiate();
                 var iconRoot = icon.Q<VisualElement>("waypoint-root") ?? icon;
+                bool selected = wp.Symbol == _selectedSymbol;
                 icon.style.position = Position.Absolute;
                 icon.style.left = screenPos.x;
                 icon.style.top = screenPos.y;
                 
                 // Waypoint Type Colors (Adding classes defined in MainStyle.uss)
                 iconRoot.AddToClassList($"wp-{wp.Type.ToString().ToLower()}");
+                if (selected)
+                {
+                    icon.style.scale = new Scale(new Vector3(1.15f, 1.15f, 1f));
+                    icon.style.unityBackgroundImageTintColor = Color.cyan;
+                }
                 icon.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(wp));
 
                 var tooltip = icon.Q<Label>("waypoint-name") ?? icon.Q<Label>("Tooltip") ?? icon.Q<Label>("tooltip-label");
@@ -721,16 +770,17 @@ namespace SpaceTraders.UI
 
             float showAllThreshold = 0.45f;
             bool showAllLabels = MapZoom > showAllThreshold;
+            var selectedGalaxySymbol = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
 
             foreach (var system in _filteredSystems)
             {
-                if (!showAllLabels && system.Symbol != _selectedSymbol)
+                if (!showAllLabels && system.Symbol != selectedGalaxySymbol)
                 {
                     continue;
                 }
 
                 Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
-                var color = system.Symbol == _selectedSymbol ? Color.cyan : Color.white;
+                var color = system.Symbol == selectedGalaxySymbol ? Color.cyan : Color.white;
                 _labelContainer.Add(GetLabelFromPool(system.Symbol, pos, color));
             }
         }
@@ -766,6 +816,11 @@ namespace SpaceTraders.UI
             var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
             selectedListEntry?.AddToClassList("selected-entry");
 
+            if (_mapMode == MapMode.System)
+            {
+                CenterMapOnWorldPosition(new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale));
+            }
+
             ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Waypoint selected.");
             _ = LoadSpecializedInfo(waypoint.Symbol, waypoint.Type.ToString());
             RefreshMapUI();
@@ -784,6 +839,11 @@ namespace SpaceTraders.UI
 
             var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
             selectedListEntry?.AddToClassList("selected-entry");
+
+            if (_mapMode == MapMode.System)
+            {
+                CenterMapOnWorldPosition(new Vector2(waypoint.X * SystemScale, waypoint.Y * SystemScale));
+            }
 
             var traitSummary = waypoint.Traits != null && waypoint.Traits.Count > 0
                 ? string.Join(", ", waypoint.Traits.Select(t => t.Symbol.ToString().Replace("_", " ")))
@@ -806,6 +866,22 @@ namespace SpaceTraders.UI
             }
 
             _extraContentContainer?.Clear();
+        }
+
+        private void CenterMapOnWorldPosition(Vector2 worldPosition)
+        {
+            if (_mapContainer == null)
+            {
+                return;
+            }
+
+            var rect = _mapContainer.contentRect;
+            if (float.IsNaN(rect.width) || float.IsNaN(rect.height) || rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            MapOffset = new Vector2(rect.width * 0.5f, rect.height * 0.5f) - (worldPosition * MapZoom);
         }
 
         private async Task LoadSpecializedInfo(string waypointSymbol, string waypointType)
@@ -893,7 +969,7 @@ namespace SpaceTraders.UI
         {
             if (_viewGalaxyButton != null)
             {
-                bool hasSelection = !string.IsNullOrEmpty(_selectedSymbol);
+                bool hasSelection = !string.IsNullOrEmpty(_selectedSystemSymbol) || !string.IsNullOrEmpty(_selectedSymbol);
                 _viewGalaxyButton.style.visibility = hasSelection ? Visibility.Visible : Visibility.Hidden;
                 _viewGalaxyButton.SetEnabled(hasSelection);
                 _viewGalaxyButton.text = _mapMode == MapMode.System ? "GALAXY" : "SYSTEM";
@@ -906,8 +982,12 @@ namespace SpaceTraders.UI
 
             if (_selectedSystemLabel != null)
             {
-                _selectedSystemLabel.text = _mapMode == MapMode.System && !string.IsNullOrEmpty(_selectedSymbol)
-                    ? $"System: {_selectedSymbol}"
+                var systemTitle = !string.IsNullOrEmpty(_currentSystem?.Symbol)
+                    ? _currentSystem.Symbol
+                    : (!string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol);
+
+                _selectedSystemLabel.text = _mapMode == MapMode.System && !string.IsNullOrEmpty(systemTitle)
+                    ? $"System: {systemTitle}"
                     : "Galaxy Map";
             }
 
@@ -943,6 +1023,66 @@ namespace SpaceTraders.UI
             {
                 DrawGalaxyBulk(painter, rect);
             }
+            else
+            {
+                DrawSystemOrbitRings(painter, rect);
+            }
+        }
+
+        private void DrawSystemOrbitRings(Painter2D painter, Rect rect)
+        {
+            if (_currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0)
+            {
+                return;
+            }
+
+            var bySymbol = _currentSystem.Waypoints
+                .Where(w => !string.IsNullOrEmpty(w.Symbol))
+                .ToDictionary(w => w.Symbol, w => w);
+
+            // Deduplicate rings by parent + radius to avoid stacking identical strokes.
+            var drawn = new HashSet<string>();
+            painter.strokeColor = new Color(0.55f, 0.65f, 0.8f, 0.35f);
+            painter.lineWidth = 1f;
+
+            foreach (var waypoint in _currentSystem.Waypoints)
+            {
+                if (waypoint == null || string.IsNullOrEmpty(waypoint.Orbits))
+                {
+                    continue;
+                }
+
+                if (!bySymbol.TryGetValue(waypoint.Orbits, out var parent))
+                {
+                    continue;
+                }
+
+                Vector2 parentWorld = new Vector2(parent.X, parent.Y) * SystemScale;
+                Vector2 childWorld = new Vector2(waypoint.X, waypoint.Y) * SystemScale;
+                float radiusWorld = Vector2.Distance(parentWorld, childWorld);
+                if (radiusWorld <= 0.001f)
+                {
+                    continue;
+                }
+
+                string ringKey = $"{parent.Symbol}:{Mathf.RoundToInt(radiusWorld * 100f)}";
+                if (!drawn.Add(ringKey))
+                {
+                    continue;
+                }
+
+                Vector2 center = parentWorld * MapZoom + MapOffset;
+                float radius = radiusWorld * MapZoom;
+
+                if (!rect.Overlaps(new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f)))
+                {
+                    continue;
+                }
+
+                painter.BeginPath();
+                painter.Arc(center, radius, 0f, 360f);
+                painter.Stroke();
+            }
         }
 
         private void DrawGalaxyBulk(Painter2D painter, Rect rect)
@@ -952,6 +1092,8 @@ namespace SpaceTraders.UI
                 return;
             }
 
+            var selectedGalaxySymbol = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
+
             foreach (var system in _filteredSystems)
             {
                 Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
@@ -960,7 +1102,7 @@ namespace SpaceTraders.UI
                     continue;
                 }
 
-                bool selected = system.Symbol == _selectedSymbol;
+                bool selected = system.Symbol == selectedGalaxySymbol;
                 painter.fillColor = selected ? Color.cyan : GetSystemColor(system.Type);
                 painter.BeginPath();
                 painter.Arc(pos, selected ? 4f : 2.5f, 0, 360);

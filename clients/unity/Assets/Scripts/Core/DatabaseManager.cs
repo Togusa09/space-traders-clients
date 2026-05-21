@@ -10,6 +10,13 @@ namespace SpaceTraders.Core
 {
     public class DatabaseManager : MonoBehaviour
     {
+        private const string DefaultDatabaseFileName = "spacetraders_v2.db";
+        private const string DatabasePathOverrideEnvVar = "SPACETRADERS_DB_PATH";
+
+        // Global override primarily for tests so they can isolate DB files.
+        public static string GlobalDatabasePathOverride { get; set; }
+
+        [SerializeField] private string _databasePathOverride;
         private string _dbPath;
         private SQLiteConnection _db;
 
@@ -21,7 +28,7 @@ namespace SpaceTraders.Core
                 {
                     if (string.IsNullOrEmpty(_dbPath))
                     {
-                        _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
+                        _dbPath = ResolveDatabasePath();
                     }
                     InitializeDatabase();
                 }
@@ -29,11 +36,37 @@ namespace SpaceTraders.Core
             }
         }
 
+        public static string BuildDefaultDatabasePath()
+        {
+            return Path.Combine(Application.persistentDataPath, DefaultDatabaseFileName);
+        }
+
+        private string ResolveDatabasePath()
+        {
+            if (!string.IsNullOrEmpty(_databasePathOverride))
+            {
+                return _databasePathOverride;
+            }
+
+            string environmentOverridePath = Environment.GetEnvironmentVariable(DatabasePathOverrideEnvVar);
+            if (!string.IsNullOrEmpty(environmentOverridePath))
+            {
+                return environmentOverridePath;
+            }
+
+            if (!string.IsNullOrEmpty(GlobalDatabasePathOverride))
+            {
+                return GlobalDatabasePathOverride;
+            }
+
+            return BuildDefaultDatabasePath();
+        }
+
         private void Awake()
         {
             if (string.IsNullOrEmpty(_dbPath))
             {
-                _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
+                _dbPath = ResolveDatabasePath();
             }
             InitializeDatabase();
         }
@@ -43,7 +76,7 @@ namespace SpaceTraders.Core
             try
             {
                 string dir = Path.GetDirectoryName(_dbPath);
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
                 Log.Info("[DatabaseManager] Connecting to {Path}", _dbPath);
                 _db = new SQLiteConnection(_dbPath);

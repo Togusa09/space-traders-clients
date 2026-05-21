@@ -11,29 +11,15 @@ namespace SpaceTraders.Tests
     public class DatabaseManagerTests
     {
         private string _dbPath;
-        private string _backupPath;
         private DatabaseManager _dbManager;
         private GameObject _dbGo;
 
         [SetUp]
         public void Setup()
         {
-            _dbPath = Path.Combine(Application.persistentDataPath, "spacetraders_v2.db");
-            _backupPath = _dbPath + ".backup";
-
-            // Backup existing player database to prevent data loss during tests
-            try
-            {
-                if (File.Exists(_dbPath))
-                {
-                    if (File.Exists(_backupPath)) File.Delete(_backupPath);
-                    File.Copy(_dbPath, _backupPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[DatabaseManagerTests] Setup backup failed: {ex.Message}");
-            }
+            string testDir = Path.Combine(Path.GetTempPath(), "SpaceTradersTests", Guid.NewGuid().ToString("N"));
+            _dbPath = Path.Combine(testDir, "spacetraders_test.db");
+            Environment.SetEnvironmentVariable("SPACETRADERS_DB_PATH", _dbPath);
 
             // Create a fresh instance of DatabaseManager
             _dbGo = new GameObject("TestDatabaseManager");
@@ -50,20 +36,25 @@ namespace SpaceTraders.Tests
                 UnityEngine.Object.DestroyImmediate(_dbGo);
             }
 
-            // Restore the backup database
+            Environment.SetEnvironmentVariable("SPACETRADERS_DB_PATH", null);
+
+            // Delete isolated test database files/directories.
             try
             {
-                if (File.Exists(_dbPath)) File.Delete(_dbPath);
-
-                if (File.Exists(_backupPath))
+                if (!string.IsNullOrEmpty(_dbPath))
                 {
-                    File.Copy(_backupPath, _dbPath);
-                    File.Delete(_backupPath);
+                    if (File.Exists(_dbPath)) File.Delete(_dbPath);
+
+                    string testDir = Path.GetDirectoryName(_dbPath);
+                    if (!string.IsNullOrEmpty(testDir) && Directory.Exists(testDir))
+                    {
+                        Directory.Delete(testDir, true);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[DatabaseManagerTests] Restore backup failed: {ex.Message}");
+                Debug.LogWarning($"[DatabaseManagerTests] Test DB cleanup failed: {ex.Message}");
             }
         }
 
