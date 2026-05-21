@@ -15,16 +15,19 @@ namespace SpaceTraders.UI
     {
         public enum Tab { Agent, Contracts, Fleet, Map, Factions }
 
+        [Header("Item Templates")]
+        [SerializeField] private VisualTreeAsset contractTemplate;
+        [SerializeField] private VisualTreeAsset shipTemplate;
+        [SerializeField] private VisualTreeAsset systemTemplate;
+        [SerializeField] private VisualTreeAsset factionTemplate;
+        [SerializeField] private VisualTreeAsset systemPanelTemplate;
+        [SerializeField] private VisualTreeAsset waypointIconTemplate;
+
         private VisualElement _root;
         private VisualElement _dataContainer;
+        private Label _statusLabel;
         
-        // Header (Labels from Dashboard.uxml - checking if they exist)
-        private Label _agentNameLabel;
-        private Label _creditsLabel;
-        private Label _factionLabel;
-        private Label _hqLabel;
-
-        // Sub-Presenters
+        // Presenters
         private ContractPresenter _contractPresenter;
         private FleetPresenter _fleetPresenter;
         private MapPresenter _mapPresenter;
@@ -50,8 +53,7 @@ namespace SpaceTraders.UI
             _mapPresenter = GetComponent<MapPresenter>();
 
             InitializeUI();
-            ShowTab(Tab.Fleet);
-            RefreshData();
+            SwitchTab(Tab.Fleet);
         }
 
         private void InitializeUI()
@@ -71,152 +73,141 @@ namespace SpaceTraders.UI
             }
 
             _dataContainer = _root.Q<VisualElement>("data-container");
+            _statusLabel = _root.Q<Label>("status-label");
 
             // Bind Global Buttons
             var backBtn = _root.Q<Button>("back-button");
             if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene("MainMenu");
 
             // Bind Sidebar/Tab Buttons
-            _root.Q<Button>("tab-agent")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Agent));
-            _root.Q<Button>("tab-contracts")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Contracts));
-            _root.Q<Button>("tab-fleet")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Fleet));
-            _root.Q<Button>("tab-map")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Map));
-            _root.Q<Button>("tab-factions")?.RegisterCallback<ClickEvent>(evt => ShowTab(Tab.Factions));
-
-            // Bind Header labels (if they exist in the UXML)
-            _agentNameLabel = _root.Q<Label>("AgentName");
-            _creditsLabel = _root.Q<Label>("CreditsValue");
-            _factionLabel = _root.Q<Label>("FactionValue");
-            _hqLabel = _root.Q<Label>("HQValue");
+            _root.Q<Button>("tab-agent")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Agent));
+            _root.Q<Button>("tab-contracts")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Contracts));
+            _root.Q<Button>("tab-fleet")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Fleet));
+            _root.Q<Button>("tab-map")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Map));
+            _root.Q<Button>("tab-factions")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Factions));
 
             Log.Info("[DashboardController] UI initialized.");
         }
 
-        private void ShowTab(Tab tab)
+        public void SwitchTab(Tab tab)
         {
             _currentTab = tab;
             if (_dataContainer == null) return;
 
             _dataContainer.Clear();
-            Log.Info("[Dashboard] Showing tab: {CurrentTab}", tab);
+            if (_statusLabel != null) _statusLabel.text = string.Empty;
+            
+            Log.Info("[Dashboard] Switching to tab: {Tab}", tab);
 
-            switch (tab)
+            if (tab == Tab.Map)
             {
-                case Tab.Agent:
-                    var agentLabel = new Label("Agent Info (Detailed view not implemented)");
-                    _dataContainer.Add(agentLabel);
-                    break;
-                case Tab.Contracts:
-                    var contractList = new ScrollView { name = "ContractList" };
-                    _dataContainer.Add(contractList);
-                    RefreshData();
-                    break;
-                case Tab.Fleet:
-                    var fleetList = new ScrollView { name = "ShipList" };
-                    _dataContainer.Add(fleetList);
-                    RefreshData();
-                    break;
-                case Tab.Map:
-                    // MapPresenter typically handles its own UI injection or binding
-                    // For now, let's see if we can trigger its enable logic
-                    if (_mapPresenter != null)
-                    {
-                        // MapPresenter might need a specific layout
-                        Log.Info("[Dashboard] Map tab selected.");
-                    }
-                    break;
-                case Tab.Factions:
-                    var factionList = new ScrollView { name = "FactionList" };
-                    _dataContainer.Add(factionList);
-                    RefreshData();
-                    break;
-            }
-        }
-
-        private async void RefreshData()
-        {
-            if (_authManager == null || !_authManager.HasAgentToken || _client == null || _apiService == null)
-            {
-                Log.Warning("[DashboardController] Refresh aborted. Dependencies not met.");
+                // MapPresenter logic (Placeholder for now)
+                _dataContainer.Add(new Label("Galaxy Map (Use MapPresenter for detailed implementation)"));
                 return;
             }
 
-            _client.SetToken(_authManager.AgentToken);
+            _ = FetchAndDisplayTab(tab);
+        }
 
+        private async Task FetchAndDisplayTab(Tab tab)
+        {
+            if (_statusLabel != null) _statusLabel.text = "Fetching data...";
+            
             try
             {
-                if (_currentTab == Tab.Fleet)
+                _client.SetToken(_authManager.AgentToken);
+
+                switch (tab)
                 {
-                    var res = await _apiService.GetShips();
-                    UpdateFleet(res.Data.ToArray());
-                }
-                else if (_currentTab == Tab.Contracts)
-                {
-                    var res = await _apiService.GetContracts();
-                    UpdateContracts(res.Data.ToArray());
-                }
-                else if (_currentTab == Tab.Factions)
-                {
-                    var res = await _apiService.GetFactions();
-                    UpdateFactions(res.Data.ToArray());
+                    case Tab.Agent:
+                        var agentRes = await _apiService.GetMyAgent();
+                        DisplayAgent(agentRes.Data);
+                        break;
+                    case Tab.Contracts:
+                        var contractRes = await _apiService.GetContracts();
+                        DisplayList(Tab.Contracts, contractRes.Data.ToArray());
+                        break;
+                    case Tab.Fleet:
+                        var fleetRes = await _apiService.GetShips();
+                        DisplayList(Tab.Fleet, fleetRes.Data.ToArray());
+                        break;
+                    case Tab.Factions:
+                        var factionsRes = await _apiService.GetFactions();
+                        DisplayList(Tab.Factions, factionsRes.Data.ToArray());
+                        break;
                 }
 
-                // Always update header if labels exist
-                var agentRes = await _apiService.GetMyAgent();
-                UpdateHeader(agentRes.Data);
+                if (_statusLabel != null) _statusLabel.text = string.Empty;
             }
             catch (System.Exception e)
             {
                 Log.Error("[Dashboard] Refresh failed: {Error}", e.Message);
+                if (_statusLabel != null) _statusLabel.text = $"Error: {e.Message}";
             }
         }
 
-        private void UpdateHeader(Agent agent)
+        private VisualElement GetContentRoot()
         {
-            if (_agentNameLabel != null) _agentNameLabel.text = agent.Symbol;
-            if (_creditsLabel != null) _creditsLabel.text = agent.Credits.ToString("N0");
-            if (_factionLabel != null) _factionLabel.text = agent.StartingFaction;
-            if (_hqLabel != null) _hqLabel.text = agent.Headquarters;
+            var scroll = new ScrollView();
+            scroll.style.flexGrow = 1;
+            _dataContainer.Add(scroll);
+            return scroll;
         }
 
-        private void UpdateFactions(Faction[] factions)
+        private void DisplayAgent(Agent agent)
         {
-            var list = _dataContainer?.Q<ScrollView>("FactionList");
-            if (list == null) return;
+            var root = GetContentRoot();
+            AddRow(root, "Symbol", agent.Symbol);
+            AddRow(root, "Headquarters", agent.Headquarters);
+            AddRow(root, "Credits", agent.Credits.ToString("N0"));
+            AddRow(root, "Starting Faction", agent.StartingFaction);
+            AddRow(root, "AccountId", agent.AccountId);
+        }
 
-            list.Clear();
-            foreach (var f in factions)
+        private void DisplayList<T>(Tab tab, T[] items)
+        {
+            if (items == null || items.Length == 0)
             {
-                var entry = new Label($"{f.Name} ({f.Symbol}) - Recruiting: {f.IsRecruiting}");
-                entry.style.paddingBottom = 5;
-                list.Add(entry);
+                _dataContainer.Add(new Label("No items found."));
+                return;
             }
-        }
 
-        private void UpdateContracts(Contract[] contracts)
-        {
-            var list = _dataContainer?.Q<ScrollView>("ContractList");
-            if (list == null || _contractPresenter == null) return;
-            _contractPresenter.Populate(list, contracts);
-        }
-
-        private void UpdateFleet(Ship[] ships)
-        {
-            var list = _dataContainer?.Q<ScrollView>("ShipList");
-            if (list == null || _fleetPresenter == null) return;
-            _fleetPresenter.Populate(list, ships);
-        }
-
-        // --- Polling for active views ---
-        private float _pollTimer = 0f;
-        private void Update()
-        {
-            _pollTimer += Time.deltaTime;
-            if (_pollTimer > 10f)
+            var scroll = (ScrollView)GetContentRoot();
+            
+            foreach (var item in items)
             {
-                _pollTimer = 0f;
-                RefreshData();
+                if (item is Contract c && _contractPresenter != null)
+                {
+                    _contractPresenter.Populate(scroll, new[] { c });
+                }
+                else if (item is Ship s && _fleetPresenter != null)
+                {
+                    _fleetPresenter.Populate(scroll, new[] { s });
+                }
+                else if (item is Faction f)
+                {
+                    scroll.Add(BindFaction(f));
+                }
             }
+        }
+
+        private VisualElement BindFaction(Faction f)
+        {
+            if (factionTemplate == null) return new Label($"{f.Name} ({f.Symbol})");
+            
+            var element = factionTemplate.Instantiate();
+            element.Q<Label>("name-label").text = $"Name: {f.Name}";
+            element.Q<Label>("details-label").text = $"Symbol: {f.Symbol} | HQ: {f.Headquarters}";
+            element.Q<Label>("description-label").text = f.Description;
+            return element;
+        }
+
+        private void AddRow(VisualElement root, string key, string value)
+        {
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };    
+            row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
+            row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
+            root.Add(row);
         }
     }
 }
