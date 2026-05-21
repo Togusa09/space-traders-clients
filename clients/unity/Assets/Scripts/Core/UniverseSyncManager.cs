@@ -98,7 +98,20 @@ namespace SpaceTraders.Core
                         }).ToList();
 
                         _dbManager.StoreSystems(indexed);
-                        
+
+                        // Extract JUMP_GATE waypoints from each system and register them for Phase 2.
+                        var jumpGateWaypoints = response.Data
+                            .SelectMany(s => (s.Waypoints ?? Enumerable.Empty<SystemWaypoint>())
+                                .Where(w => w.Type == WaypointType.JUMPGATE)
+                                .Select(w => (w.Symbol, s.Symbol)))
+                            .ToList();
+
+                        if (jumpGateWaypoints.Count > 0)
+                        {
+                            _dbManager.StoreJumpGateWaypoints(jumpGateWaypoints);
+                            Log.Info("[UniverseSyncManager] Registered {Count} JUMP_GATE waypoints for connection sync.", jumpGateWaypoints.Count);
+                        }
+
                         int newCount = _dbManager.GetIndexedSystemCount();
                         Log.Info("[UniverseSyncManager] Page {Page} stored. Total indexed: {Total}", CurrentPage, newCount);
 
@@ -115,6 +128,9 @@ namespace SpaceTraders.Core
                     }
 
                 } while (CurrentPage <= TotalPages);
+
+                // --- Phase 2: Fetch jump gate connection data ---
+                await SyncJumpGateConnectionsAsync(token);
             }
             catch (OperationCanceledException)
             {
@@ -129,6 +145,44 @@ namespace SpaceTraders.Core
                 _isSyncing = false;
                 Log.Info("[UniverseSyncManager] Universe sync process terminated.");
             }
+        }
+        private async Task SyncJumpGateConnectionsAsync(CancellationToken token)
+        {
+            var pending = _dbManager.GetPendingJumpGates();
+            if (pending.Count == 0)
+            {
+                Log.Info("[UniverseSyncManager] No pending jump gate connections to fetch.");
+                return;
+            }
+
+            Log.Info("[UniverseSyncManager] Phase 2: Fetching connections for {Count} jump gate(s).", pending.Count);
+            int fetched = 0;
+
+            foreach (var gate in pending)
+            {
+                if (token.IsCancellationRequested) break;
+
+                try
+                {
+                    var response = await _apiService.GetJumpGate(gate.SystemSymbol, gate.WaypointSymbol);
+                    var connections = response?.Data?.Connections ?? new List<string>();
+                    _dbManager.StoreJumpGateConnections(gate.WaypointSymbol, connections);
+                    fetched++;
+                    Log.Info("[UniverseSyncManager] Jump gate {WP}: {Count} connection(s) stored. ({Done}/{Total})",
+                        gate.WaypointSymbol, connections.Count, fetched, pending.Count);
+                }
+                catch (Exception e)
+                {
+                    Log.Warning("[UniverseSyncManager] Failed to fetch jump gate {WP}: {Error}",
+                        gate.WaypointSymbol, e.Message);
+                    // Store empty list so it is not retried on next launch unless ClearCache is called.
+                    _dbManager.StoreJumpGateConnections(gate.WaypointSymbol, new List<string>());
+                }
+
+                await Task.Delay(1100, token);
+            }
+
+            Log.Info("[UniverseSyncManager] Phase 2 complete. Fetched connections for {Done} jump gate(s).", fetched);
         }
     }
 }
