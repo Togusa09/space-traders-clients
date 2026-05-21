@@ -137,5 +137,76 @@ namespace SpaceTraders.Tests
             Assert.IsTrue(solSystems.Exists(s => s.Symbol == "SOL-B"));
             Assert.IsFalse(solSystems.Exists(s => s.Symbol == "VEGA-I"));
         }
+
+        [Test]
+        public void StoreAndGetJumpGateWaypoints_Success()
+        {
+            var waypoints = new List<(string, string)>
+            {
+                ("SOL-A-JG1", "SOL-A"),
+                ("VEGA-I-JG2", "VEGA-I")
+            };
+
+            _dbManager.StoreJumpGateWaypoints(waypoints);
+
+            Assert.AreEqual(2, _dbManager.GetIndexedJumpGateCount());
+
+            // All should be pending (ConnectionsJson == null)
+            var pending = _dbManager.GetPendingJumpGates();
+            Assert.AreEqual(2, pending.Count);
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "SOL-A-JG1" && g.SystemSymbol == "SOL-A"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "VEGA-I-JG2" && g.SystemSymbol == "VEGA-I"));
+        }
+
+        [Test]
+        public void StoreJumpGateConnections_UpdatesExistingRecord()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)> { ("SOL-A-JG1", "SOL-A") });
+
+            var connections = new List<string> { "VEGA-I-JG2", "ALPHA-B-JG3" };
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", connections);
+
+            var fetched = _dbManager.GetAllJumpGateConnections();
+            Assert.AreEqual(1, fetched.Count);
+
+            var gate = fetched[0];
+            Assert.AreEqual("SOL-A-JG1", gate.WaypointSymbol);
+            Assert.IsNotNull(gate.ConnectionsJson);
+            Assert.IsTrue(gate.ConnectionsJson.Contains("VEGA-I-JG2"));
+            Assert.IsTrue(gate.ConnectionsJson.Contains("ALPHA-B-JG3"));
+        }
+
+        [Test]
+        public void GetPendingJumpGates_ReturnsOnlyUnfetched()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)>
+            {
+                ("SOL-A-JG1", "SOL-A"),
+                ("VEGA-I-JG2", "VEGA-I"),
+                ("ALPHA-B-JG3", "ALPHA-B")
+            });
+
+            // Fetch connections for one of them
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", new List<string> { "VEGA-I-JG2" });
+
+            var pending = _dbManager.GetPendingJumpGates();
+            Assert.AreEqual(2, pending.Count);
+            Assert.IsFalse(pending.Exists(g => g.WaypointSymbol == "SOL-A-JG1"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "VEGA-I-JG2"));
+            Assert.IsTrue(pending.Exists(g => g.WaypointSymbol == "ALPHA-B-JG3"));
+        }
+
+        [Test]
+        public void ClearCache_AlsoClearsJumpGates()
+        {
+            _dbManager.StoreJumpGateWaypoints(new List<(string, string)> { ("SOL-A-JG1", "SOL-A") });
+            _dbManager.StoreJumpGateConnections("SOL-A-JG1", new List<string> { "VEGA-I-JG2" });
+
+            Assert.AreEqual(1, _dbManager.GetIndexedJumpGateCount());
+
+            _dbManager.ClearCache();
+
+            Assert.AreEqual(0, _dbManager.GetIndexedJumpGateCount());
+        }
     }
 }
