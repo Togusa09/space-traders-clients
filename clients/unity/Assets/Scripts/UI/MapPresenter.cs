@@ -184,6 +184,7 @@ namespace SpaceTraders.UI
             }
 
             UpdateModeChrome();
+            PopulateSystemList();
             ResetMapCamera();
             RefreshMapUI();
         }
@@ -312,7 +313,7 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
-                var systems = _pagedSystems != null && _pagedSystems.Count > 0 ? _pagedSystems : _filteredSystems;
+                var systems = _filteredSystems;
                 if (systems != null && systems.Count > 0)
                 {
                     FitBounds(systems.Select(s => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale)), rect);
@@ -387,6 +388,12 @@ namespace SpaceTraders.UI
             _systemList.Clear();
             _listEntries.Clear();
 
+            if (_mapMode == MapMode.System)
+            {
+                PopulateWaypointHierarchyList();
+                return;
+            }
+
             if (_filteredSystems == null)
             {
                 UpdatePageInfo(0, 0);
@@ -429,6 +436,100 @@ namespace SpaceTraders.UI
                 _systemList.Add(entry);
                 _listEntries.Add(root);
             }
+        }
+
+        private void PopulateWaypointHierarchyList()
+        {
+            var waypoints = _currentSystem?.Waypoints;
+            if (waypoints == null || waypoints.Count == 0)
+            {
+                UpdatePageInfo(0, 0);
+                return;
+            }
+
+            UpdatePageInfo(1, 1);
+
+            string search = (_searchField?.value ?? string.Empty).Trim().ToUpperInvariant();
+            var childMap = waypoints
+                .GroupBy(w => string.IsNullOrEmpty(w.Orbits) ? string.Empty : w.Orbits)
+                .ToDictionary(g => g.Key, g => g.OrderBy(w => w.Symbol).ToList());
+
+            if (!childMap.TryGetValue(string.Empty, out var roots))
+            {
+                roots = waypoints.Where(w => string.IsNullOrEmpty(w.Orbits)).OrderBy(w => w.Symbol).ToList();
+            }
+
+            foreach (var root in roots)
+            {
+                if (!WaypointMatches(root, childMap, search)) continue;
+                AddWaypointEntry(root, 0);
+                AddWaypointChildren(root, 1, childMap, search);
+            }
+        }
+
+        private void AddWaypointChildren(SystemWaypoint parent, int indent, Dictionary<string, List<SystemWaypoint>> childMap, string search)
+        {
+            if (parent == null || !childMap.TryGetValue(parent.Symbol, out var children))
+            {
+                return;
+            }
+
+            foreach (var child in children)
+            {
+                if (!WaypointMatches(child, childMap, search)) continue;
+                AddWaypointEntry(child, indent);
+                AddWaypointChildren(child, indent + 1, childMap, search);
+            }
+        }
+
+        private bool WaypointMatches(SystemWaypoint waypoint, Dictionary<string, List<SystemWaypoint>> childMap, string search)
+        {
+            if (waypoint == null) return false;
+            if (string.IsNullOrEmpty(search)) return true;
+            if (!string.IsNullOrEmpty(waypoint.Symbol) && waypoint.Symbol.Contains(search, StringComparison.OrdinalIgnoreCase)) return true;
+
+            if (!childMap.TryGetValue(waypoint.Symbol, out var children))
+            {
+                return false;
+            }
+
+            return children.Any(child => WaypointMatches(child, childMap, search));
+        }
+
+        private void AddWaypointEntry(SystemWaypoint waypoint, int indent)
+        {
+            if (waypoint == null || systemEntryTemplate == null || _systemList == null)
+            {
+                return;
+            }
+
+            var entry = systemEntryTemplate.Instantiate();
+            var root = entry.Q<VisualElement>(null, "dashboard-entry") ?? entry;
+            root.name = $"list-{waypoint.Symbol}";
+            root.AddToClassList("selectable-entry");
+            root.style.marginLeft = indent * 12;
+
+            var symbolLabel = entry.Q<Label>("symbol-label");
+            var detailsLabel = entry.Q<Label>("details-label");
+            if (symbolLabel != null)
+            {
+                symbolLabel.text = (indent > 0 ? "↳ " : string.Empty) + waypoint.Symbol;
+            }
+
+            if (detailsLabel != null)
+            {
+                detailsLabel.text = waypoint.Type.ToString().Replace("_", " ");
+            }
+
+            if (waypoint.Symbol == _selectedSymbol)
+            {
+                root.AddToClassList("selected-entry");
+            }
+
+            root.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(waypoint));
+
+            _systemList.Add(entry);
+            _listEntries.Add(root);
         }
 
         private void UpdatePageInfo(int currentPage, int totalPages)
@@ -482,6 +583,7 @@ namespace SpaceTraders.UI
                     }
 
                     UpdateModeChrome();
+                    PopulateSystemList();
                     ResetMapCamera();
                     RefreshMapUI();
                     
@@ -566,11 +668,11 @@ namespace SpaceTraders.UI
             targetLayer.Clear();
             _labelContainer.Clear();
 
-            if (_pagedSystems == null || _pagedSystems.Count == 0) return;
+            if (_filteredSystems == null || _filteredSystems.Count == 0) return;
 
             float scale = GalaxyScale;
 
-            foreach (var system in _pagedSystems)
+            foreach (var system in _filteredSystems)
             {
                 var node = new VisualElement();
                 node.style.position = Position.Absolute;
@@ -580,7 +682,7 @@ namespace SpaceTraders.UI
                 node.style.borderTopRightRadius = 5;
                 node.style.borderBottomLeftRadius = 5;
                 node.style.borderBottomRightRadius = 5;
-                node.style.backgroundColor = system.Symbol == _selectedSymbol ? new Color(1f, 0.85f, 0.2f) : new Color(0.2f, 0.7f, 1f);
+                node.style.backgroundColor = system.Symbol == _selectedSymbol ? new Color(1f, 0.85f, 0.2f) : GetSystemColor(system.Type);
                 node.style.left = system.X * scale * MapZoom + MapOffset.x;
                 node.style.top = system.Y * scale * MapZoom + MapOffset.y;
                 node.tooltip = $"{system.Symbol} ({system.Type})";
@@ -602,19 +704,40 @@ namespace SpaceTraders.UI
         {
             if (waypoint == null) return;
 
+            _selectedSymbol = waypoint.Symbol;
             _selectedWaypoint = null;
+
+            foreach (var listEntry in _listEntries)
+            {
+                listEntry.RemoveFromClassList("selected-entry");
+            }
+
+            var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
+            selectedListEntry?.AddToClassList("selected-entry");
+
             ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, "Detailed waypoint traits are not available for indexed systems.");
+            RefreshMapUI();
         }
 
         private void SelectWaypoint(Waypoint waypoint)
         {
             if (waypoint == null) return;
 
+            _selectedSymbol = waypoint.Symbol;
             _selectedWaypoint = waypoint;
+            foreach (var listEntry in _listEntries)
+            {
+                listEntry.RemoveFromClassList("selected-entry");
+            }
+
+            var selectedListEntry = _systemList?.Q<VisualElement>($"list-{waypoint.Symbol}");
+            selectedListEntry?.AddToClassList("selected-entry");
+
             var traitSummary = waypoint.Traits != null && waypoint.Traits.Count > 0
                 ? string.Join(", ", waypoint.Traits.Select(t => t.Symbol.ToString().Replace("_", " ")))
                 : "No traits available.";
             ApplyWaypointSelection(waypoint.Symbol, waypoint.Type.ToString(), waypoint.X, waypoint.Y, traitSummary);
+            RefreshMapUI();
         }
 
         private void ApplyWaypointSelection(string symbol, string type, int x, int y, string description)
@@ -634,7 +757,9 @@ namespace SpaceTraders.UI
         {
             if (_viewGalaxyButton != null)
             {
-                _viewGalaxyButton.style.display = string.IsNullOrEmpty(_selectedSymbol) ? DisplayStyle.None : DisplayStyle.Flex;
+                bool hasSelection = !string.IsNullOrEmpty(_selectedSymbol);
+                _viewGalaxyButton.style.visibility = hasSelection ? Visibility.Visible : Visibility.Hidden;
+                _viewGalaxyButton.SetEnabled(hasSelection);
                 _viewGalaxyButton.text = _mapMode == MapMode.System ? "GALAXY" : "SYSTEM";
             }
 
@@ -743,14 +868,15 @@ namespace SpaceTraders.UI
 
             if (_mapMode == MapMode.Galaxy)
             {
-                var typeSet = (_pagedSystems ?? _filteredSystems ?? new List<DatabaseManager.IndexedSystem>())
-                    .Select(s => s.Type)
+                var typeSet = (_filteredSystems ?? new List<DatabaseManager.IndexedSystem>())
+                    .Select(s => NormalizeSystemTypeKey(s.Type))
+                    .Where(t => !string.IsNullOrEmpty(t))
                     .Distinct()
                     .OrderBy(t => t);
 
                 foreach (var type in typeSet)
                 {
-                    AddLegendRow(type, GetSystemColor(type));
+                    AddLegendRow(FormatSystemTypeLabel(type), GetSystemColor(type));
                 }
             }
             else
@@ -785,16 +911,48 @@ namespace SpaceTraders.UI
             _legendItems.Add(row);
         }
 
-        private Color GetSystemColor(string type) => type switch
+        private Color GetSystemColor(string type)
         {
-            "RED_STAR" => new Color(1f, 0.3f, 0.3f),
-            "BLUE_STAR" => new Color(0.3f, 0.6f, 1f),
-            "YOUNG_STAR" => new Color(0.6f, 1f, 1f),
-            "NEBULA" => new Color(1f, 0.5f, 1f),
-            "BLACK_HOLE" => new Color(0.2f, 0.2f, 0.2f),
-            "HYPERGIANT" => new Color(1f, 0.6f, 0.2f),
-            _ => Color.white
-        };
+            var key = NormalizeSystemTypeKey(type);
+            return key switch
+            {
+                "REDSTAR" => new Color(1f, 0.3f, 0.3f),
+                "BLUESTAR" => new Color(0.3f, 0.6f, 1f),
+                "NEUTRONSTAR" => new Color(0.85f, 0.85f, 1f),
+                "ORANGESTAR" => new Color(1f, 0.6f, 0.25f),
+                "YOUNGSTAR" => new Color(0.6f, 1f, 1f),
+                "WHITEDWARF" => new Color(0.95f, 0.95f, 1f),
+                "UNSTABLE" => new Color(1f, 0.4f, 0.8f),
+                "NEBULA" => new Color(1f, 0.5f, 1f),
+                "BLACKHOLE" => new Color(0.2f, 0.2f, 0.2f),
+                "HYPERGIANT" => new Color(1f, 0.6f, 0.2f),
+                _ => Color.white
+            };
+        }
+
+        private string NormalizeSystemTypeKey(string type)
+        {
+            if (string.IsNullOrEmpty(type)) return string.Empty;
+            return new string(type.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        }
+
+        private string FormatSystemTypeLabel(string normalizedType)
+        {
+            return normalizedType switch
+            {
+                "REDSTAR" => "RED STAR",
+                "BLUESTAR" => "BLUE STAR",
+                "NEUTRONSTAR" => "NEUTRON STAR",
+                "ORANGESTAR" => "ORANGE STAR",
+                "YOUNGSTAR" => "YOUNG STAR",
+                "WHITEDWARF" => "WHITE DWARF",
+                "UNSTABLE" => "UNSTABLE",
+                "NEBULA" => "NEBULA",
+                "BLACKHOLE" => "BLACK HOLE",
+                "HYPERGIANT" => "HYPERGIANT",
+                _ => normalizedType
+            };
+        }
 
         private Color GetWaypointColor(string type) => type switch {
             "PLANET" => new Color(0, 0.6f, 1f),
