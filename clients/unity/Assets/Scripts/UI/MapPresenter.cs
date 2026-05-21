@@ -668,36 +668,46 @@ namespace SpaceTraders.UI
             targetLayer.Clear();
             _labelContainer.Clear();
 
-            if (_filteredSystems == null || _filteredSystems.Count == 0) return;
+            UpdateGalaxyLabels();
+        }
 
-            float scale = GalaxyScale;
+        private void UpdateGalaxyLabels()
+        {
+            if (_labelContainer == null || _filteredSystems == null || _filteredSystems.Count == 0)
+            {
+                return;
+            }
+
+            float showAllThreshold = 3.5f;
+            bool showAllLabels = MapZoom > showAllThreshold;
 
             foreach (var system in _filteredSystems)
             {
-                var node = new VisualElement();
-                node.style.position = Position.Absolute;
-                node.style.width = 10;
-                node.style.height = 10;
-                node.style.borderTopLeftRadius = 5;
-                node.style.borderTopRightRadius = 5;
-                node.style.borderBottomLeftRadius = 5;
-                node.style.borderBottomRightRadius = 5;
-                node.style.backgroundColor = system.Symbol == _selectedSymbol ? new Color(1f, 0.85f, 0.2f) : GetSystemColor(system.Type);
-                node.style.left = system.X * scale * MapZoom + MapOffset.x;
-                node.style.top = system.Y * scale * MapZoom + MapOffset.y;
-                node.tooltip = $"{system.Symbol} ({system.Type})";
-                node.RegisterCallback<ClickEvent>(_ => SelectSystem(system.Symbol));
+                if (!showAllLabels && system.Symbol != _selectedSymbol)
+                {
+                    continue;
+                }
 
-                var label = new Label(system.Symbol);
-                label.style.position = Position.Absolute;
-                label.style.left = system.X * scale * MapZoom + MapOffset.x + 12;
-                label.style.top = system.Y * scale * MapZoom + MapOffset.y - 2;
-                label.style.fontSize = 9;
-                label.style.color = system.Symbol == _selectedSymbol ? Color.yellow : Color.white;
-
-                targetLayer.Add(node);
-                _labelContainer.Add(label);
+                Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
+                var color = system.Symbol == _selectedSymbol ? Color.cyan : Color.white;
+                _labelContainer.Add(GetLabelFromPool(system.Symbol, pos, color));
             }
+        }
+
+        private Label GetLabelFromPool(string text, Vector2 pos, Color color)
+        {
+            return new Label(text)
+            {
+                style =
+                {
+                    position = Position.Absolute,
+                    left = pos.x + 8,
+                    top = pos.y - 8,
+                    color = color,
+                    fontSize = 10,
+                    unityFontStyleAndWeight = color == Color.cyan ? FontStyle.Bold : FontStyle.Normal
+                }
+            };
         }
 
         private void SelectSystemWaypoint(SystemWaypoint waypoint)
@@ -802,6 +812,34 @@ namespace SpaceTraders.UI
             DrawLines(painter, rect, minorSize, new Color(0.2f, 0.2f, 0.2f, 0.1f));
             // Draw Major Grid
             DrawLines(painter, rect, majorSize, new Color(0.4f, 0.4f, 0.4f, 0.2f));
+
+            if (_mapMode == MapMode.Galaxy)
+            {
+                DrawGalaxyBulk(painter, rect);
+            }
+        }
+
+        private void DrawGalaxyBulk(Painter2D painter, Rect rect)
+        {
+            if (_filteredSystems == null || _filteredSystems.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var system in _filteredSystems)
+            {
+                Vector2 pos = new Vector2(system.X * GalaxyScale, system.Y * GalaxyScale) * MapZoom + MapOffset;
+                if (!rect.Contains(pos))
+                {
+                    continue;
+                }
+
+                bool selected = system.Symbol == _selectedSymbol;
+                painter.fillColor = selected ? Color.cyan : GetSystemColor(system.Type);
+                painter.BeginPath();
+                painter.Arc(pos, selected ? 4f : 2.5f, 0, 360);
+                painter.Fill();
+            }
         }
 
         private void DrawLines(Painter2D painter, Rect rect, float size, Color color)
