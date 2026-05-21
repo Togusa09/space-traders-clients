@@ -328,33 +328,30 @@ namespace SpaceTraders.UI
 
             ConfigureZoomLimits();
 
-            if (_mapMode == MapMode.Galaxy)
+            var points = GetCurrentModeWorldPoints();
+            if (points.Any())
             {
-                var systems = _filteredSystems;
-                if (systems != null && systems.Count > 0)
-                {
-                    FitBounds(systems.Select(GetGalaxySystemWorldPosition), rect);
-                }
-                else
-                {
-                    MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
-                    MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
-                }
+                FitBounds(points, rect);
             }
             else
             {
-                if (_currentSystem?.Waypoints != null && _currentSystem.Waypoints.Count > 0)
-                {
-                    FitBounds(_currentSystem.Waypoints.Select(GetSystemWaypointWorldPosition), rect);
-                }
-                else
-                {
-                    MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
-                    MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
-                }
+                MapOffset = new Vector2(rect.width / 2f, rect.height / 2f);
+                MapZoom = Mathf.Clamp(1.0f, _minZoom, _maxZoom);
             }
 
             _mapInitialized = true;
+        }
+
+        private IEnumerable<Vector2> GetCurrentModeWorldPoints()
+        {
+            if (_mapMode == MapMode.Galaxy)
+            {
+                return (_filteredSystems ?? Enumerable.Empty<DatabaseManager.IndexedSystem>())
+                    .Select(GetGalaxySystemWorldPosition);
+            }
+
+            return (_currentSystem?.Waypoints ?? Enumerable.Empty<SystemWaypoint>())
+                .Select(GetSystemWaypointWorldPosition);
         }
 
         private void ConfigureZoomLimits()
@@ -722,26 +719,22 @@ namespace SpaceTraders.UI
         {
             if (_mapContainer == null) return;
             _mapContainer.MarkDirtyRepaint();
-            if (_mapMode == MapMode.Galaxy)
-            {
-                UpdateGalaxySystems();
-            }
-            else
-            {
-                UpdateWaypoints();
-            }
+            RefreshMapOverlayLayers();
         }
 
-        private void UpdateWaypoints()
+        private void RefreshMapOverlayLayers()
         {
-            var targetLayer = _waypointsLayer ?? _mapContainer;
-            if (targetLayer == null || _labelContainer == null) return;
+            var mapLayer = _waypointsLayer ?? _mapContainer;
+            if (mapLayer == null || _labelContainer == null) return;
             
-            targetLayer.Clear();
+            mapLayer.Clear();
             _labelContainer.Clear();
 
-            if (_currentSystem == null) return;
-            if (_currentSystem.Waypoints == null || _currentSystem.Waypoints.Count == 0) return;
+            if (_mapMode == MapMode.Galaxy)
+            {
+                UpdateGalaxyLabels();
+                return;
+            }
 
             UpdateSystemWaypointLabels();
         }
@@ -769,17 +762,6 @@ namespace SpaceTraders.UI
             }
         }
 
-        private void UpdateGalaxySystems()
-        {
-            var targetLayer = _waypointsLayer ?? _mapContainer;
-            if (targetLayer == null || _labelContainer == null) return;
-
-            targetLayer.Clear();
-            _labelContainer.Clear();
-
-            UpdateGalaxyLabels();
-        }
-
         private void UpdateGalaxyLabels()
         {
             if (_labelContainer == null || _filteredSystems == null || _filteredSystems.Count == 0)
@@ -789,7 +771,7 @@ namespace SpaceTraders.UI
 
             float showAllThreshold = 0.45f;
             bool showAllLabels = MapZoom > showAllThreshold;
-            var selectedGalaxySymbol = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
+            var selectedGalaxySymbol = GetSelectedGalaxySymbol();
 
             foreach (var system in _filteredSystems)
             {
@@ -1038,16 +1020,20 @@ namespace SpaceTraders.UI
             // Draw Major Grid
             DrawLines(painter, rect, majorSize, new Color(0.4f, 0.4f, 0.4f, 0.2f));
 
+            DrawModeGeometry(painter, rect);
+        }
+
+        private void DrawModeGeometry(Painter2D painter, Rect rect)
+        {
             if (_mapMode == MapMode.Galaxy)
             {
                 DrawJumpGatePaths(painter, rect);
                 DrawGalaxyBulk(painter, rect);
+                return;
             }
-            else
-            {
-                DrawSystemOrbitRings(painter, rect);
-                DrawSystemWaypoints(painter, rect);
-            }
+
+            DrawSystemOrbitRings(painter, rect);
+            DrawSystemWaypoints(painter, rect);
         }
 
         private void DrawSystemWaypoints(Painter2D painter, Rect rect)
@@ -1301,7 +1287,7 @@ namespace SpaceTraders.UI
                 return;
             }
 
-            var selectedGalaxySymbol = !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
+            var selectedGalaxySymbol = GetSelectedGalaxySymbol();
 
             foreach (var system in _filteredSystems)
             {
@@ -1412,6 +1398,11 @@ namespace SpaceTraders.UI
                 "HYPERGIANT" => new Color(1f, 0.6f, 0.2f),
                 _ => Color.white
             };
+        }
+
+        private string GetSelectedGalaxySymbol()
+        {
+            return !string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol;
         }
         private void HandleMapClick(Vector2 localPosition)
         {

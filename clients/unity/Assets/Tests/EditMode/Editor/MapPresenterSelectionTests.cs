@@ -38,7 +38,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             var currentSystem = new SpaceTraders.Generated.Model.System(
                 symbol: "X1-TEST",
                 sectorSymbol: "X1",
-                type: SystemType.NEUTRON_STAR,
+                type: SystemType.NEUTRONSTAR,
                 x: 0,
                 y: 0,
                 waypoints: new List<SystemWaypoint>
@@ -61,9 +61,9 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [TearDown]
         public void TearDown()
         {
-            foreach (var go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+            foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
             {
-                if (go.name == "MapPresenterTest")
+                if (go.name == "MapPresenterTest" && go.scene.IsValid())
                 {
                     Object.DestroyImmediate(go);
                 }
