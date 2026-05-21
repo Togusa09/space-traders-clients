@@ -17,6 +17,7 @@ namespace SpaceTraders.UI
         [Header("Templates")]
         public VisualTreeAsset systemEntryTemplate;
         public VisualTreeAsset waypointIconTemplate;
+        public VisualTreeAsset systemPanelTemplate;
 
         [Header("UI References")]
         private VisualElement _systemList;
@@ -39,39 +40,39 @@ namespace SpaceTraders.UI
             _apiService = apiService;
         }
 
-        private void Start()
+        public void SetupMapPanel(VisualElement container)
         {
-            InitializeUI();
-            
-            if (_dbManager != null)
+            if (systemPanelTemplate == null)
             {
-                _allGalaxySystems = _dbManager.GetAllSystems();
-                FilterSystems("");
+                container.Add(new Label("Error: System Panel Template missing."));
+                return;
             }
-        }
 
-        private void InitializeUI()
-        {
-            var uiDocument = GetComponent<UIDocument>();
-            if (uiDocument == null) return;
-            
-            var root = uiDocument.rootVisualElement;
-            if (root == null) return;
+            container.Clear();
+            var panel = systemPanelTemplate.Instantiate();
+            panel.style.flexGrow = 1;
+            container.Add(panel);
 
-            // Mapping to Panel_Systems.uxml (kebab-case)
-            _systemList = root.Q<VisualElement>("system-list");
-            _mapContainer = root.Q<VisualElement>("map-container");
-            _searchField = root.Q<TextField>("system-search");
-            _selectedSystemLabel = root.Q<Label>("selected-system-title");
-            _systemDetailPanel = root.Q<VisualElement>("waypoint-details");
-            _waypointList = root.Q<ScrollView>("wp-extra-scroll");
+            // Bind references from the instantiated panel
+            _systemList = panel.Q<VisualElement>("system-list");
+            _mapContainer = panel.Q<VisualElement>("map-container");
+            _searchField = panel.Q<TextField>("system-search");
+            _selectedSystemLabel = panel.Q<Label>("selected-system-title");
+            _systemDetailPanel = panel.Q<VisualElement>("waypoint-details");
+            _waypointList = panel.Q<ScrollView>("wp-extra-scroll");
 
             if (_searchField != null)
             {
                 _searchField.RegisterValueChangedCallback(evt => FilterSystems(evt.newValue));
             }
-            
-            Log.Info("[MapPresenter] UI initialized.");
+
+            if (_dbManager != null)
+            {
+                _allGalaxySystems = _dbManager.GetAllSystems();
+                FilterSystems("");
+            }
+
+            Log.Info("[MapPresenter] Map panel setup complete.");
         }
 
         private void FilterSystems(string query)
@@ -155,7 +156,7 @@ namespace SpaceTraders.UI
                 if (tooltip != null)
                 {
                     tooltip.text = wp.Symbol;
-                    tooltip.style.display = DisplayStyle.None; // Hidden by default
+                    tooltip.style.display = DisplayStyle.None;
                     icon.RegisterCallback<MouseEnterEvent>(evt => tooltip.style.display = DisplayStyle.Flex);
                     icon.RegisterCallback<MouseLeaveEvent>(evt => tooltip.style.display = DisplayStyle.None);
                 }

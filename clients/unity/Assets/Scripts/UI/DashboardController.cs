@@ -16,12 +16,7 @@ namespace SpaceTraders.UI
         public enum Tab { Agent, Contracts, Fleet, Map, Factions }
 
         [Header("Item Templates")]
-        [SerializeField] private VisualTreeAsset contractTemplate;
-        [SerializeField] private VisualTreeAsset shipTemplate;
-        [SerializeField] private VisualTreeAsset systemTemplate;
         [SerializeField] private VisualTreeAsset factionTemplate;
-        [SerializeField] private VisualTreeAsset systemPanelTemplate;
-        [SerializeField] private VisualTreeAsset waypointIconTemplate;
 
         private VisualElement _root;
         private VisualElement _dataContainer;
@@ -101,8 +96,14 @@ namespace SpaceTraders.UI
 
             if (tab == Tab.Map)
             {
-                // MapPresenter logic (Placeholder for now)
-                _dataContainer.Add(new Label("Galaxy Map (Use MapPresenter for detailed implementation)"));
+                if (_mapPresenter != null)
+                {
+                    _mapPresenter.SetupMapPanel(_dataContainer);
+                }
+                else
+                {
+                    _dataContainer.Add(new Label("MapPresenter component not found on Dashboard GameObject."));
+                }
                 return;
             }
 
@@ -125,15 +126,15 @@ namespace SpaceTraders.UI
                         break;
                     case Tab.Contracts:
                         var contractRes = await _apiService.GetContracts();
-                        DisplayList(Tab.Contracts, contractRes.Data.ToArray());
+                        DisplayContracts(contractRes.Data.ToArray());
                         break;
                     case Tab.Fleet:
                         var fleetRes = await _apiService.GetShips();
-                        DisplayList(Tab.Fleet, fleetRes.Data.ToArray());
+                        DisplayFleet(fleetRes.Data.ToArray());
                         break;
                     case Tab.Factions:
                         var factionsRes = await _apiService.GetFactions();
-                        DisplayList(Tab.Factions, factionsRes.Data.ToArray());
+                        DisplayFactions(factionsRes.Data.ToArray());
                         break;
                 }
 
@@ -164,30 +165,56 @@ namespace SpaceTraders.UI
             AddRow(root, "AccountId", agent.AccountId);
         }
 
-        private void DisplayList<T>(Tab tab, T[] items)
+        private void DisplayContracts(Contract[] contracts)
         {
-            if (items == null || items.Length == 0)
+            if (contracts == null || contracts.Length == 0)
             {
-                _dataContainer.Add(new Label("No items found."));
+                _dataContainer.Add(new Label("No contracts found."));
                 return;
             }
 
             var scroll = (ScrollView)GetContentRoot();
-            
-            foreach (var item in items)
+            if (_contractPresenter != null)
             {
-                if (item is Contract c && _contractPresenter != null)
-                {
-                    _contractPresenter.Populate(scroll, new[] { c });
-                }
-                else if (item is Ship s && _fleetPresenter != null)
-                {
-                    _fleetPresenter.Populate(scroll, new[] { s });
-                }
-                else if (item is Faction f)
-                {
-                    scroll.Add(BindFaction(f));
-                }
+                _contractPresenter.Populate(scroll, contracts);
+            }
+            else
+            {
+                scroll.Add(new Label("ContractPresenter missing."));
+            }
+        }
+
+        private void DisplayFleet(Ship[] ships)
+        {
+            if (ships == null || ships.Length == 0)
+            {
+                _dataContainer.Add(new Label("No ships found."));
+                return;
+            }
+
+            var scroll = (ScrollView)GetContentRoot();
+            if (_fleetPresenter != null)
+            {
+                _fleetPresenter.Populate(scroll, ships);
+            }
+            else
+            {
+                scroll.Add(new Label("FleetPresenter missing."));
+            }
+        }
+
+        private void DisplayFactions(Faction[] factions)
+        {
+            if (factions == null || factions.Length == 0)
+            {
+                _dataContainer.Add(new Label("No factions found."));
+                return;
+            }
+
+            var scroll = (ScrollView)GetContentRoot();
+            foreach (var f in factions)
+            {
+                scroll.Add(BindFaction(f));
             }
         }
 
@@ -208,6 +235,21 @@ namespace SpaceTraders.UI
             row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
             row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
             root.Add(row);
+        }
+
+        // --- Polling for active views ---
+        private float _pollTimer = 0f;
+        private void Update()
+        {
+            _pollTimer += Time.deltaTime;
+            if (_pollTimer > 15f)
+            {
+                _pollTimer = 0f;
+                if (_currentTab != Tab.Map && _currentTab != Tab.Agent)
+                {
+                    _ = FetchAndDisplayTab(_currentTab);
+                }
+            }
         }
     }
 }
