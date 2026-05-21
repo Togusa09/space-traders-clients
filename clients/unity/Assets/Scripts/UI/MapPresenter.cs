@@ -26,12 +26,15 @@ namespace SpaceTraders.UI
         private Label _selectedSystemLabel;
         private VisualElement _systemDetailPanel;
         private ScrollView _waypointList;
+        private VisualElement _legendItems;
 
         private List<DatabaseManager.IndexedSystem> _allGalaxySystems;
         private List<DatabaseManager.IndexedSystem> _filteredSystems;
 
         private DatabaseManager _dbManager;
         private APIService _apiService;
+
+        private SpaceTraders.Generated.Model.System _currentSystem;
 
         [Inject]
         public void Construct(DatabaseManager dbManager, APIService apiService)
@@ -60,11 +63,15 @@ namespace SpaceTraders.UI
             _selectedSystemLabel = panel.Q<Label>("selected-system-title");
             _systemDetailPanel = panel.Q<VisualElement>("waypoint-details");
             _waypointList = panel.Q<ScrollView>("wp-extra-scroll");
+            _legendItems = panel.Q<VisualElement>("legend-items");
 
             if (_searchField != null)
             {
                 _searchField.RegisterValueChangedCallback(evt => FilterSystems(evt.newValue));
             }
+
+            // Deferred map rendering after layout is calculated
+            _mapContainer?.RegisterCallback<GeometryChangedEvent>(OnMapContainerResized);
 
             if (_dbManager != null)
             {
@@ -72,7 +79,17 @@ namespace SpaceTraders.UI
                 FilterSystems("");
             }
 
+            PopulateLegend();
+
             Log.Info("[MapPresenter] Map panel setup complete.");
+        }
+
+        private void OnMapContainerResized(GeometryChangedEvent evt)
+        {
+            if (_currentSystem != null)
+            {
+                UpdateMap(_currentSystem);
+            }
         }
 
         private void FilterSystems(string query)
@@ -103,7 +120,10 @@ namespace SpaceTraders.UI
                 if (detailsLabel != null) detailsLabel.text = $"{s.Type} | {s.X},{s.Y}";
                 
                 var btn = entry.Q<Button>("view-button") ?? entry.Q<Button>();
-                if (btn != null) btn.clicked += () => SelectSystem(s.Symbol);
+                if (btn != null)
+                {
+                    btn.clicked += () => SelectSystem(s.Symbol);
+                }
                 
                 _systemList.Add(entry);
             }
@@ -111,6 +131,7 @@ namespace SpaceTraders.UI
 
         private async void SelectSystem(string symbol)
         {
+            Log.Info("[Map] Selecting system {Symbol}...", symbol);
             if (_selectedSystemLabel != null) _selectedSystemLabel.text = $"System: {symbol}";
             if (_systemDetailPanel != null) _systemDetailPanel.style.display = DisplayStyle.Flex;
             if (_waypointList != null) _waypointList.Clear();
@@ -120,7 +141,8 @@ namespace SpaceTraders.UI
                 var res = await _apiService.GetSystem(symbol);
                 if (res != null && res.Data != null)
                 {
-                    UpdateMap(res.Data);
+                    _currentSystem = res.Data;
+                    UpdateMap(_currentSystem);
                     
                     var wpsRes = await _apiService.GetSystemWaypoints(symbol);
                     if (wpsRes != null && wpsRes.Data != null)
@@ -138,11 +160,21 @@ namespace SpaceTraders.UI
         private void UpdateMap(SpaceTraders.Generated.Model.System system)
         {
             if (_mapContainer == null) return;
+            
+            // Check if layout is ready
+            if (float.IsNaN(_mapContainer.layout.width) || _mapContainer.layout.width <= 0)
+            {
+                Log.Warning("[Map] Map container layout not ready. Rendering deferred.");
+                return;
+            }
+
             _mapContainer.Clear();
             
             float scale = 5f;
             float centerX = _mapContainer.layout.width / 2;
             float centerY = _mapContainer.layout.height / 2;
+
+            Log.Info("[Map] Rendering {Count} waypoints for {System}", system.Waypoints.Count, system.Symbol);
 
             foreach (var wp in system.Waypoints)
             {
@@ -191,6 +223,26 @@ namespace SpaceTraders.UI
 
                 container.Add(actions);
                 _waypointList.Add(container);
+            }
+        }
+
+        private void PopulateLegend()
+        {
+            if (_legendItems == null) return;
+            _legendItems.Clear();
+
+            var types = Enum.GetNames(typeof(WaypointType));
+            foreach (var type in types)
+            {
+                var row = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 2 }};
+                var bullet = new VisualElement { style = { width = 8, height = 8, backgroundColor = Color.cyan, marginRight = 5 }};
+                bullet.style.borderTopLeftRadius = 4; bullet.style.borderTopRightRadius = 4;
+                bullet.style.borderBottomLeftRadius = 4; bullet.style.borderBottomRightRadius = 4;
+                
+                var label = new Label(type.Replace("_", " ")) { style = { fontSize = 9, color = Color.gray }};
+                row.Add(bullet);
+                row.Add(label);
+                _legendItems.Add(row);
             }
         }
 
