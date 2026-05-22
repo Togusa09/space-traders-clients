@@ -61,7 +61,7 @@ namespace SpaceTraders.Core
                     byte[] iv = new byte[aes.BlockSize / 8];
                     if (fullCipher.Length < iv.Length)
                     {
-                        Log.Error("[SecureTokenStorage] Cipher text is too short to contain IV.");
+                        Debug.LogError("[SecureTokenStorage] Cipher text is too short to contain IV.");
                         return string.Empty;
                     }
 
@@ -79,7 +79,7 @@ namespace SpaceTraders.Core
             }
             catch (Exception e)
             {
-                Log.Error("[SecureTokenStorage] Decryption failed: {Error}", e.Message);
+                Debug.LogError($"[SecureTokenStorage] Decryption failed: {e.Message}");
                 return string.Empty;
             }
         }
