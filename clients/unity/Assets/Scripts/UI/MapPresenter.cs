@@ -95,6 +95,8 @@ namespace SpaceTraders.UI
         private const float GalaxyScale = 6f;
         private const float SystemScale = 5f;
         private const float SelectionScreenRadius = 14f;
+        private const float GalaxyIconDetailZoomThreshold = 0.18f;
+        private const int GalaxyIconDetailCountThreshold = 1800;
 
         [Inject]
         public void Construct(DatabaseManager dbManager, APIService apiService)
@@ -1187,16 +1189,16 @@ namespace SpaceTraders.UI
                     DrawCircleIcon(painter, pos, style);
                     break;
                 case IconShape.Square:
-                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 4, 45f), style);
+                    DrawSquareIcon(painter, pos, style);
                     break;
                 case IconShape.Triangle:
-                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 3, -90f), style);
+                    DrawTriangleIcon(painter, pos, style);
                     break;
                 case IconShape.Diamond:
-                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 4, 0f), style);
+                    DrawDiamondIcon(painter, pos, style);
                     break;
                 case IconShape.Hexagon:
-                    DrawPolygonIcon(painter, BuildRegularPolygon(pos, style.Radius, 6, -90f), style);
+                    DrawHexagonIcon(painter, pos, style);
                     break;
             }
 
@@ -1220,42 +1222,104 @@ namespace SpaceTraders.UI
             painter.Stroke();
         }
 
-        private void DrawPolygonIcon(Painter2D painter, IReadOnlyList<Vector2> points, IconStyle style)
+        private void DrawSquareIcon(Painter2D painter, Vector2 center, IconStyle style)
         {
-            if (points == null || points.Count < 3)
-            {
-                return;
-            }
+            float r = style.Radius;
+            DrawPolygonIcon(
+                painter,
+                style,
+                new Vector2(center.x, center.y - r),
+                new Vector2(center.x + r, center.y),
+                new Vector2(center.x, center.y + r),
+                new Vector2(center.x - r, center.y));
+        }
 
+        private void DrawTriangleIcon(Painter2D painter, Vector2 center, IconStyle style)
+        {
+            float r = style.Radius;
+            DrawPolygonIcon(
+                painter,
+                style,
+                new Vector2(center.x, center.y - r),
+                new Vector2(center.x + r * 0.866f, center.y + r * 0.5f),
+                new Vector2(center.x - r * 0.866f, center.y + r * 0.5f));
+        }
+
+        private void DrawDiamondIcon(Painter2D painter, Vector2 center, IconStyle style)
+        {
+            float r = style.Radius;
+            DrawPolygonIcon(
+                painter,
+                style,
+                new Vector2(center.x, center.y - r),
+                new Vector2(center.x + r, center.y),
+                new Vector2(center.x, center.y + r),
+                new Vector2(center.x - r, center.y));
+        }
+
+        private void DrawHexagonIcon(Painter2D painter, Vector2 center, IconStyle style)
+        {
+            float r = style.Radius;
+            float x = r * 0.866f;
+            float y = r * 0.5f;
+            DrawPolygonIcon(
+                painter,
+                style,
+                new Vector2(center.x, center.y - r),
+                new Vector2(center.x + x, center.y - y),
+                new Vector2(center.x + x, center.y + y),
+                new Vector2(center.x, center.y + r),
+                new Vector2(center.x - x, center.y + y),
+                new Vector2(center.x - x, center.y - y));
+        }
+
+        private void DrawPolygonIcon(Painter2D painter, IconStyle style, Vector2 p0, Vector2 p1, Vector2 p2)
+        {
             painter.fillColor = style.FillColor;
             painter.strokeColor = style.StrokeColor;
             painter.lineWidth = style.StrokeWidth;
 
             painter.BeginPath();
-            painter.MoveTo(points[0]);
-            for (int i = 1; i < points.Count; i++)
-            {
-                painter.LineTo(points[i]);
-            }
-            painter.LineTo(points[0]);
+            painter.MoveTo(p0);
+            painter.LineTo(p1);
+            painter.LineTo(p2);
+            painter.LineTo(p0);
             painter.Fill();
             painter.Stroke();
         }
 
-        private Vector2[] BuildRegularPolygon(Vector2 center, float radius, int sides, float startAngleDeg)
+        private void DrawPolygonIcon(Painter2D painter, IconStyle style, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
         {
-            var points = new Vector2[sides];
-            float step = 360f / sides;
+            painter.fillColor = style.FillColor;
+            painter.strokeColor = style.StrokeColor;
+            painter.lineWidth = style.StrokeWidth;
 
-            for (int i = 0; i < sides; i++)
-            {
-                float angle = (startAngleDeg + i * step) * Mathf.Deg2Rad;
-                points[i] = new Vector2(
-                    center.x + Mathf.Cos(angle) * radius,
-                    center.y + Mathf.Sin(angle) * radius);
-            }
+            painter.BeginPath();
+            painter.MoveTo(p0);
+            painter.LineTo(p1);
+            painter.LineTo(p2);
+            painter.LineTo(p3);
+            painter.LineTo(p0);
+            painter.Fill();
+            painter.Stroke();
+        }
 
-            return points;
+        private void DrawPolygonIcon(Painter2D painter, IconStyle style, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, Vector2 p5)
+        {
+            painter.fillColor = style.FillColor;
+            painter.strokeColor = style.StrokeColor;
+            painter.lineWidth = style.StrokeWidth;
+
+            painter.BeginPath();
+            painter.MoveTo(p0);
+            painter.LineTo(p1);
+            painter.LineTo(p2);
+            painter.LineTo(p3);
+            painter.LineTo(p4);
+            painter.LineTo(p5);
+            painter.LineTo(p0);
+            painter.Fill();
+            painter.Stroke();
         }
 
         private void DrawSystemOrbitRings(Painter2D painter, Rect rect)
@@ -1395,6 +1459,7 @@ namespace SpaceTraders.UI
             }
 
             var selectedGalaxySymbol = GetSelectedGalaxySymbol();
+            bool useDetailIcons = MapZoom >= GalaxyIconDetailZoomThreshold && _filteredSystems.Count <= GalaxyIconDetailCountThreshold;
 
             foreach (var system in _filteredSystems)
             {
@@ -1405,6 +1470,15 @@ namespace SpaceTraders.UI
                 }
 
                 bool selected = system.Symbol == selectedGalaxySymbol;
+                if (!useDetailIcons)
+                {
+                    painter.fillColor = selected ? Color.cyan : GetSystemColor(system.Type);
+                    painter.BeginPath();
+                    painter.Arc(pos, selected ? 3.8f : 2.2f, 0f, 360f);
+                    painter.Fill();
+                    continue;
+                }
+
                 DrawIcon(painter, pos, GetGalaxySystemIconStyle(system.Type, selected));
             }
         }
