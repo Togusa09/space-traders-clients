@@ -1225,13 +1225,14 @@ namespace SpaceTraders.UI
         private void DrawSquareIcon(Painter2D painter, Vector2 center, IconStyle style)
         {
             float r = style.Radius;
+            float halfSide = r / Mathf.Sqrt(2f);
             DrawPolygonIcon(
                 painter,
                 style,
-                new Vector2(center.x, center.y - r),
-                new Vector2(center.x + r, center.y),
-                new Vector2(center.x, center.y + r),
-                new Vector2(center.x - r, center.y));
+                new Vector2(center.x - halfSide, center.y - halfSide),
+                new Vector2(center.x + halfSide, center.y - halfSide),
+                new Vector2(center.x + halfSide, center.y + halfSide),
+                new Vector2(center.x - halfSide, center.y + halfSide));
         }
 
         private void DrawTriangleIcon(Painter2D painter, Vector2 center, IconStyle style)
