@@ -652,26 +652,20 @@ namespace SpaceTraders.UI
 
         private DatabaseManager.IndexedSystem FindClosestGalaxySystem(Vector2 worldPoint, float worldThreshold)
         {
-            if (_filteredSystems == null || _filteredSystems.Count == 0) return null;
-
-            return _filteredSystems
-                .Select(s => (System: s, Distance: Vector2.Distance(GetGalaxySystemWorldPosition(s), worldPoint)))
-                .Where(x => x.Distance < worldThreshold)
-                .OrderBy(x => x.Distance)
-                .Select(x => x.System)
-                .FirstOrDefault();
+            return MapSelectionMath.FindClosest(
+                _filteredSystems,
+                worldPoint,
+                worldThreshold,
+                GetGalaxySystemWorldPosition);
         }
 
         private SystemWaypoint FindClosestSystemWaypoint(Vector2 worldPoint, float worldThreshold)
         {
-            if (_currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0) return null;
-
-            return _currentSystem.Waypoints
-                .Select(w => (Waypoint: w, Distance: Vector2.Distance(GetSystemWaypointWorldPosition(w), worldPoint)))
-                .Where(x => x.Distance < worldThreshold)
-                .OrderBy(x => x.Distance)
-                .Select(x => x.Waypoint)
-                .FirstOrDefault();
+            return MapSelectionMath.FindClosest(
+                _currentSystem?.Waypoints,
+                worldPoint,
+                worldThreshold,
+                GetSystemWaypointWorldPosition);
         }
 
         private class MapManipulator : Manipulator
@@ -729,6 +723,22 @@ namespace SpaceTraders.UI
         private static string NormalizeToken(string value)
         {
             return (value ?? string.Empty).Replace("_", string.Empty).ToUpperInvariant();
+        }
+    }
+
+    internal static class MapSelectionMath
+    {
+        public static T FindClosest<T>(IEnumerable<T> items, Vector2 targetPoint, float threshold, Func<T, Vector2> getWorldPosition)
+            where T : class
+        {
+            if (items == null || getWorldPosition == null) return null;
+
+            return items
+                .Select(item => (Item: item, Distance: Vector2.Distance(getWorldPosition(item), targetPoint)))
+                .Where(x => x.Distance < threshold)
+                .OrderBy(x => x.Distance)
+                .Select(x => x.Item)
+                .FirstOrDefault();
         }
     }
 
