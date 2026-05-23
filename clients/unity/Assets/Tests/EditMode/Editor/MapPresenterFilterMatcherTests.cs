@@ -77,5 +77,40 @@ namespace SpaceTraders.Tests.EditMode.Editor
             var result = (bool)method.Invoke(null, new object[] { waypoint, detailedWaypoint, "X1-TEST", "PLANET", "MARKETPLACE" });
             Assert.IsTrue(result);
         }
+
+        [Test]
+        public void MatchesWaypoint_FacilityFilterWithoutDetailedWaypoint_ReturnsFalse()
+        {
+            var matcherType = GetMatcherType();
+            var method = matcherType.GetMethod("MatchesWaypoint", BindingFlags.Public | BindingFlags.Static);
+            Assert.NotNull(method, "Expected MatchesWaypoint method to exist.");
+
+            var waypoint = new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>());
+
+            var result = (bool)method.Invoke(null, new object[] { waypoint, null, "X1-TEST", "PLANET", "MARKETPLACE" });
+            Assert.IsFalse(result);
+        }
+
+        [Test]
+        public void MatchesWaypoint_NormalizesTypeFilterToken()
+        {
+            var matcherType = GetMatcherType();
+            var method = matcherType.GetMethod("MatchesWaypoint", BindingFlags.Public | BindingFlags.Static);
+            Assert.NotNull(method, "Expected MatchesWaypoint method to exist.");
+
+            var waypoint = new SystemWaypoint("X1-TEST-A", WaypointType.ORBITALSTATION, 0, 0, new List<WaypointOrbital>());
+            var detailedWaypoint = new Waypoint(
+                symbol: "X1-TEST-A",
+                type: WaypointType.ORBITALSTATION,
+                systemSymbol: "X1-TEST",
+                x: 0,
+                y: 0,
+                orbitals: new List<WaypointOrbital>(),
+                traits: new List<WaypointTrait>(),
+                isUnderConstruction: false);
+
+            var result = (bool)method.Invoke(null, new object[] { waypoint, detailedWaypoint, "X1", "ORBITAL_STATION", "ALL" });
+            Assert.IsTrue(result);
+        }
     }
 }

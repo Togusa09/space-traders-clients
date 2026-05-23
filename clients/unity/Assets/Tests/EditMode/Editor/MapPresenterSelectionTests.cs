@@ -159,6 +159,58 @@ namespace SpaceTraders.Tests.EditMode.Editor
             Assert.AreEqual("X1-TEST-A", GetPrivateField<string>(presenter, "_selectedSymbol"));
         }
 
+        [Test]
+        public void HandleMapClick_GalaxyMode_OutsideThreshold_DoesNotSelect()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            SetPrivateField(presenter, "_filteredSystems", new List<DatabaseManager.IndexedSystem>
+            {
+                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
+            });
+            SetPrivateField(presenter, "_mapMode", ParseMapMode("Galaxy"));
+            presenter.MapZoom = 1.0f;
+            presenter.MapOffset = Vector2.zero;
+
+            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
+
+            method.Invoke(presenter, new object[] { new Vector2(100f, 100f) });
+
+            Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSymbol"));
+            Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSystemSymbol"));
+        }
+
+        [Test]
+        public void HandleMapClick_SystemMode_OutsideThreshold_DoesNotSelect()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            var currentSystem = new SpaceTraders.Generated.Model.System(
+                symbol: "X1-TEST",
+                sectorSymbol: "X1",
+                type: SystemType.NEUTRONSTAR,
+                x: 0,
+                y: 0,
+                waypoints: new List<SystemWaypoint>
+                {
+                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>())
+                },
+                factions: new List<SystemFaction>());
+
+            SetPrivateField(presenter, "_currentSystem", currentSystem);
+            SetPrivateField(presenter, "_mapMode", ParseMapMode("System"));
+            presenter.MapZoom = 1.0f;
+            presenter.MapOffset = Vector2.zero;
+
+            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
+
+            method.Invoke(presenter, new object[] { new Vector2(100f, 100f) });
+
+            Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSymbol"));
+        }
+
         [TearDown]
         public void TearDown()
         {
