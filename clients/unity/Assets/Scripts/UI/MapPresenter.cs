@@ -212,8 +212,20 @@ namespace SpaceTraders.UI
         private void ToggleMapMode()
         {
             _mapMode = _mapMode == MapMode.System ? MapMode.Galaxy : MapMode.System;
+            var previousSelectedSymbol = _selectedSymbol;
             _selectedSymbol = null;
             _selectedWaypoint = null;
+
+            if (_mapMode == MapMode.System)
+            {
+                var targetSystemSymbol = MapModeTransitionResolver.GetSystemLoadTarget(_selectedSystemSymbol, previousSelectedSymbol, _currentSystem);
+                if (!string.IsNullOrEmpty(targetSystemSymbol))
+                {
+                    SelectSystem(targetSystemSymbol);
+                    return;
+                }
+            }
+
             InitializeFilterOptions();
             UpdateModeChrome();
             PopulateSystemList();
@@ -808,6 +820,17 @@ namespace SpaceTraders.UI
         {
             if (detailedWaypoints == null || string.IsNullOrEmpty(symbol)) return null;
             return detailedWaypoints.FirstOrDefault(x => x.Symbol == symbol);
+        }
+    }
+
+    internal static class MapModeTransitionResolver
+    {
+        public static string GetSystemLoadTarget(string selectedSystemSymbol, string selectedSymbol, SpaceTraders.Generated.Model.System currentSystem)
+        {
+            string target = !string.IsNullOrEmpty(selectedSystemSymbol) ? selectedSystemSymbol : selectedSymbol;
+            if (string.IsNullOrEmpty(target)) return null;
+            if (!string.IsNullOrEmpty(currentSystem?.Symbol) && currentSystem.Symbol == target) return null;
+            return target;
         }
     }
 
