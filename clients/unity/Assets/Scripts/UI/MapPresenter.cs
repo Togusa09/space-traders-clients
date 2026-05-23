@@ -506,8 +506,7 @@ namespace SpaceTraders.UI
             if (_wpSymbolLabel != null) _wpSymbolLabel.text = w.Symbol;
             if (_wpTypeLabel != null) _wpTypeLabel.text = w.Type.ToString().Replace("_", " ");
             if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"({w.X}, {w.Y})";
-            string d = w.Type switch { WaypointType.PLANET => "Celestial body orbiting a star.", WaypointType.MOON => "Satellite orbiting a planet.", WaypointType.ORBITALSTATION => "Man-made orbital construct.", WaypointType.JUMPGATE => "Fast travel gateway.", WaypointType.ASTEROIDFIELD => "Mining region.", WaypointType.NEBULA => "Cloud of gas and dust.", WaypointType.GASGIANT => "Large gaseous planet.", _ => "Location in space." };
-            if (w.Traits?.Count > 0) d += "\n\nTraits: " + string.Join(", ", w.Traits.Select(t => t.Name));
+            string d = WaypointDescriptionBuilder.Build(w);
             if (_wpDescLabel != null) _wpDescLabel.text = d;
             _ = UpdateSpecializedInfoAsync(w.Symbol, w.Type.ToString());
         }
@@ -800,6 +799,31 @@ namespace SpaceTraders.UI
             }
 
             return style;
+        }
+    }
+
+    internal static class WaypointDescriptionBuilder
+    {
+        public static string Build(Waypoint waypoint)
+        {
+            string description = waypoint.Type switch
+            {
+                WaypointType.PLANET => "Celestial body orbiting a star.",
+                WaypointType.MOON => "Satellite orbiting a planet.",
+                WaypointType.ORBITALSTATION => "Man-made orbital construct.",
+                WaypointType.JUMPGATE => "Fast travel gateway.",
+                WaypointType.ASTEROIDFIELD => "Mining region.",
+                WaypointType.NEBULA => "Cloud of gas and dust.",
+                WaypointType.GASGIANT => "Large gaseous planet.",
+                _ => "Location in space."
+            };
+
+            if (waypoint.Traits?.Count > 0)
+            {
+                description += "\n\nTraits: " + string.Join(", ", waypoint.Traits.Select(t => t.Name));
+            }
+
+            return description;
         }
     }
 }
