@@ -11,42 +11,65 @@ using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
+    public enum SyncPhase
+    {
+        Idle,
+        Systems,
+        JumpGates,
+        Complete
+    }
+
     public class UniverseSyncManager : MonoBehaviour
     {
         private bool _isSyncing = false;
         public bool IsSyncing => _isSyncing;
         public float Progress { get; private set; }
         
+        public SyncPhase CurrentPhase { get; private set; } = SyncPhase.Idle;
         public int TotalSystemsExpected { get; private set; }
         public int CurrentPage { get; private set; }
         public int TotalPages { get; private set; }
 
+        public int PendingJumpGates { get; private set; }
+        public int TotalJumpGates { get; private set; }
+
         private CancellationTokenSource _cts;
 
         private APIService _apiService;
+        private AuthManager _authManager;
         private ISystemIndexRepository _systemIndexRepository;
         private IJumpGateRepository _jumpGateRepository;
 
         [Inject]
-        internal void Construct(APIService apiService, ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository)
+        internal void Construct(APIService apiService, AuthManager authManager, ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository)
         {
             _apiService = apiService;
+            _authManager = authManager;
             _systemIndexRepository = systemIndexRepository;
             _jumpGateRepository = jumpGateRepository;
         }
 
         private void Start()
         {
-            if (_systemIndexRepository == null) return;
+            if (_systemIndexRepository == null || _authManager == null) return;
 
-            int existingCount = _systemIndexRepository.GetIndexedSystemCount();
-            Log.Info("[UniverseSyncManager] Initial check. Indexed systems: {Count}", existingCount);
+            RefreshCounts();
             
-            if (existingCount == 0)
+            if (_authManager.HasAgentToken)
             {
-                Log.Info("[UniverseSyncManager] DB empty, auto-starting sync...");
+                Log.Info("[UniverseSyncManager] Agent token detected, checking sync status...");
+                // We'll let SyncUniverseAsync decide if it needs to do anything.
                 StartSync();
             }
+        }
+
+        public void RefreshCounts()
+        {
+            if (_systemIndexRepository == null || _jumpGateRepository == null) return;
+            TotalJumpGates = _jumpGateRepository.GetIndexedJumpGateCount();
+            PendingJumpGates = _jumpGateRepository.GetPendingJumpGates().Count;
+            Log.Info("[UniverseSyncManager] Counts refreshed. Systems: {Systems}, Jump Gates: {JumpGates} (Pending: {Pending})", 
+                _systemIndexRepository.GetIndexedSystemCount(), TotalJumpGates, PendingJumpGates);
         }
 
         public void StartSync()
@@ -56,23 +79,29 @@ namespace SpaceTraders.Core
             _ = SyncUniverseAsync(_cts.Token);
         }
 
+
         public void StopSync()
         {
             if (!_isSyncing) return;
             _cts?.Cancel();
             _isSyncing = false;
+            CurrentPhase = SyncPhase.Idle;
             Log.Info("[UniverseSyncManager] Sync cancel requested.");
         }
 
         private async Task SyncUniverseAsync(CancellationToken token)
         {
             _isSyncing = true;
+            CurrentPhase = SyncPhase.Systems;
             Progress = 0f;
             Log.Info("[UniverseSyncManager] Starting async background universe sync...");
 
-            CurrentPage = 1;
-            TotalPages = 1;
             const int limit = 20;
+            int existingCount = _systemIndexRepository.GetIndexedSystemCount();
+            
+            // Resume from last page. We re-run the last partial page to be safe.
+            CurrentPage = Math.Max(1, (existingCount / limit) + 1);
+            TotalPages = CurrentPage; // Will be updated after first request
 
             try
             {
@@ -105,7 +134,7 @@ namespace SpaceTraders.Core
                         int newCount = _systemIndexRepository.GetIndexedSystemCount();
                         Log.Info("[UniverseSyncManager] Page {Page} stored. Total indexed: {Total}", CurrentPage, newCount);
 
-                        Progress = (float)CurrentPage / TotalPages;
+                        Progress = TotalSystemsExpected > 0 ? (float)newCount / TotalSystemsExpected : 0f;
                         CurrentPage++;
                         
                         // Respect Rate Limits
@@ -120,15 +149,26 @@ namespace SpaceTraders.Core
                 } while (CurrentPage <= TotalPages);
 
                 // --- Phase 2: Fetch jump gate connection data ---
-                await SyncJumpGateConnectionsAsync(token);
+                if (!token.IsCancellationRequested)
+                {
+                    await SyncJumpGateConnectionsAsync(token);
+                }
+                
+                if (!token.IsCancellationRequested)
+                {
+                    CurrentPhase = SyncPhase.Complete;
+                    Progress = 1f;
+                }
             }
             catch (OperationCanceledException)
             {
                 Log.Info("[UniverseSyncManager] Sync task cancelled.");
+                CurrentPhase = SyncPhase.Idle;
             }
             catch (Exception e)
             {
                 Log.Error("[UniverseSyncManager] Sync encountered a critical error: {Error}", e.Message);
+                CurrentPhase = SyncPhase.Idle;
             }
             finally
             {
@@ -138,15 +178,21 @@ namespace SpaceTraders.Core
         }
         private async Task SyncJumpGateConnectionsAsync(CancellationToken token)
         {
+            CurrentPhase = SyncPhase.JumpGates;
             var pending = _jumpGateRepository.GetPendingJumpGates();
+            TotalJumpGates = _jumpGateRepository.GetIndexedJumpGateCount();
+            PendingJumpGates = pending.Count;
+
             if (pending.Count == 0)
             {
                 Log.Info("[UniverseSyncManager] No pending jump gate connections to fetch.");
+                Progress = 1f;
                 return;
             }
 
             Log.Info("[UniverseSyncManager] Phase 2: Fetching connections for {Count} jump gate(s).", pending.Count);
             int fetched = 0;
+            int totalToFetch = pending.Count;
 
             foreach (var gate in pending)
             {
@@ -158,8 +204,12 @@ namespace SpaceTraders.Core
                     var connections = response?.Data?.Connections ?? new List<string>();
                     _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, connections);
                     fetched++;
+                    PendingJumpGates--;
+                    
+                    Progress = (float)(TotalJumpGates - PendingJumpGates) / TotalJumpGates;
+
                     Log.Info("[UniverseSyncManager] Jump gate {WP}: {Count} connection(s) stored. ({Done}/{Total})",
-                        gate.WaypointSymbol, connections.Count, fetched, pending.Count);
+                        gate.WaypointSymbol, connections.Count, fetched, totalToFetch);
                 }
                 catch (Exception e)
                 {
@@ -167,6 +217,7 @@ namespace SpaceTraders.Core
                         gate.WaypointSymbol, e.Message);
                     // Store empty list so it is not retried on next launch unless ClearCache is called.
                     _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, new List<string>());
+                    PendingJumpGates--;
                 }
 
                 await Task.Delay(1100, token);
