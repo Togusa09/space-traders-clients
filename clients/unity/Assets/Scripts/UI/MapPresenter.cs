@@ -324,20 +324,16 @@ namespace SpaceTraders.UI
 
         private void FitBounds(IEnumerable<Vector2> points, Rect rect)
         {
-            var list = points.ToList();
-            if (list.Count == 0) { MapOffset = rect.size / 2f; MapZoom = 1.0f; return; }
-            float minX = list.Min(p => p.x), maxX = list.Max(p => p.x);
-            float minY = list.Min(p => p.y), maxY = list.Max(p => p.y);
-            float w = Mathf.Max(1f, maxX - minX), h = Mathf.Max(1f, maxY - minY);
-            MapZoom = Mathf.Clamp(Mathf.Min((rect.width * 0.85f) / w, (rect.height * 0.85f) / h), _minZoom, _maxZoom);
-            MapOffset = (rect.size / 2f) - (new Vector2(minX + maxX, minY + maxY) / 2f * MapZoom);
+            var result = MapViewportMath.FitBounds(points, rect, _minZoom, _maxZoom);
+            MapOffset = result.Offset;
+            MapZoom = result.Zoom;
         }
 
         private Vector2 GetGalaxySystemWorldPosition(DatabaseManager.IndexedSystem s) => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale);
         private Vector2 GetSystemWaypointWorldPosition(SystemWaypoint w) => new Vector2(w.X * SystemScale, w.Y * SystemScale);
         private Vector2 GetWaypointWorldPosition(Waypoint w) => new Vector2(w.X * SystemScale, w.Y * SystemScale);
-        private Vector2 WorldToScreen(Vector2 wp) => wp * MapZoom + MapOffset;
-        private Vector2 ScreenToWorld(Vector2 lp) => (lp - MapOffset) / Mathf.Max(MapZoom, 0.000001f);
+        private Vector2 WorldToScreen(Vector2 wp) => MapViewportMath.WorldToScreen(wp, MapZoom, MapOffset);
+        private Vector2 ScreenToWorld(Vector2 lp) => MapViewportMath.ScreenToWorld(lp, MapZoom, MapOffset);
 
         private void PopulateSystemList()
         {
@@ -482,7 +478,7 @@ namespace SpaceTraders.UI
         {
             var rect = _mapContainer?.contentRect ?? Rect.zero;
             if (rect.width <= 0) return;
-            MapOffset = (rect.size / 2f) - (wp * MapZoom);
+            MapOffset = MapViewportMath.CenterOnWorldPoint(rect, wp, MapZoom);
         }
 
         private void ApplyGalaxySystemSelectionDetails(DatabaseManager.IndexedSystem s)
@@ -718,6 +714,48 @@ namespace SpaceTraders.UI
         private static string NormalizeToken(string value)
         {
             return (value ?? string.Empty).Replace("_", string.Empty).ToUpperInvariant();
+        }
+    }
+
+    internal static class MapViewportMath
+    {
+        public static Vector2 WorldToScreen(Vector2 worldPoint, float zoom, Vector2 offset)
+        {
+            return worldPoint * zoom + offset;
+        }
+
+        public static Vector2 ScreenToWorld(Vector2 localPoint, float zoom, Vector2 offset)
+        {
+            return (localPoint - offset) / Mathf.Max(zoom, 0.000001f);
+        }
+
+        public static Vector2 CenterOnWorldPoint(Rect rect, Vector2 worldPoint, float zoom)
+        {
+            return (rect.size / 2f) - (worldPoint * zoom);
+        }
+
+        public static (Vector2 Offset, float Zoom) FitBounds(IEnumerable<Vector2> points, Rect rect, float minZoom, float maxZoom)
+        {
+            var list = points.ToList();
+            if (list.Count == 0)
+            {
+                return (rect.size / 2f, 1.0f);
+            }
+
+            float minX = list.Min(p => p.x);
+            float maxX = list.Max(p => p.x);
+            float minY = list.Min(p => p.y);
+            float maxY = list.Max(p => p.y);
+
+            float width = Mathf.Max(1f, maxX - minX);
+            float height = Mathf.Max(1f, maxY - minY);
+            float zoomX = (rect.width * 0.85f) / width;
+            float zoomY = (rect.height * 0.85f) / height;
+            float zoom = Mathf.Clamp(Mathf.Min(zoomX, zoomY), minZoom, maxZoom);
+
+            var center = new Vector2((minX + maxX) / 2f, (minY + maxY) / 2f);
+            var offset = (rect.size / 2f) - (center * zoom);
+            return (offset, zoom);
         }
     }
 }
