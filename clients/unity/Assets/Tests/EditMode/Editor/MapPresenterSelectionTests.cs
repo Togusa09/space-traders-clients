@@ -59,6 +59,35 @@ namespace SpaceTraders.Tests.EditMode.Editor
         }
 
         [Test]
+        public void FindClosestSystemWaypoint_ReturnsNearestWithinThreshold()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            var currentSystem = new SpaceTraders.Generated.Model.System(
+                symbol: "X1-TEST",
+                sectorSymbol: "X1",
+                type: SystemType.NEUTRONSTAR,
+                x: 0,
+                y: 0,
+                waypoints: new List<SystemWaypoint>
+                {
+                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>()),
+                    new SystemWaypoint("X1-TEST-B", WaypointType.MOON, 20, 0, new List<WaypointOrbital>())
+                },
+                factions: new List<SystemFaction>());
+
+            SetPrivateField(presenter, "_currentSystem", currentSystem);
+
+            var method = typeof(MapPresenter).GetMethod("FindClosestSystemWaypoint", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(method, "Expected private method FindClosestSystemWaypoint to exist.");
+
+            var result = method.Invoke(presenter, new object[] { new Vector2(1f, 0f), 5.0f }) as SystemWaypoint;
+
+            Assert.NotNull(result);
+            Assert.AreEqual("X1-TEST-A", result.Symbol);
+        }
+
+        [Test]
         public void FindClosestGalaxySystem_ReturnsNullOutsideThreshold()
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();

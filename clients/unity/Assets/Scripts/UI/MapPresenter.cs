@@ -637,8 +637,41 @@ namespace SpaceTraders.UI
         private void HandleMapClick(Vector2 lp)
         {
             var wp = ScreenToWorld(lp);
-            if (_mapMode == MapMode.Galaxy) { if (_filteredSystems == null) return; var c = _filteredSystems.Select(s => (s: s, d: Vector2.Distance(GetGalaxySystemWorldPosition(s), wp))).Where(x => x.d < SelectionScreenRadius / Mathf.Max(MapZoom, 0.01f)).OrderBy(x => x.d).FirstOrDefault(); if (c.s != null) SelectGalaxySystem(c.s); }
-            else { if (_currentSystem?.Waypoints == null) return; var c = _currentSystem.Waypoints.Select(w => (w: w, d: Vector2.Distance(GetSystemWaypointWorldPosition(w), wp))).Where(x => x.d < SelectionScreenRadius / Mathf.Max(MapZoom, 0.01f)).OrderBy(x => x.d).FirstOrDefault(); if (c.w != null) SelectSystemWaypoint(c.w); }
+            float worldThreshold = SelectionScreenRadius / Mathf.Max(MapZoom, 0.01f);
+            if (_mapMode == MapMode.Galaxy)
+            {
+                var closestSystem = FindClosestGalaxySystem(wp, worldThreshold);
+                if (closestSystem != null) SelectGalaxySystem(closestSystem);
+            }
+            else
+            {
+                var closestWaypoint = FindClosestSystemWaypoint(wp, worldThreshold);
+                if (closestWaypoint != null) SelectSystemWaypoint(closestWaypoint);
+            }
+        }
+
+        private DatabaseManager.IndexedSystem FindClosestGalaxySystem(Vector2 worldPoint, float worldThreshold)
+        {
+            if (_filteredSystems == null || _filteredSystems.Count == 0) return null;
+
+            return _filteredSystems
+                .Select(s => (System: s, Distance: Vector2.Distance(GetGalaxySystemWorldPosition(s), worldPoint)))
+                .Where(x => x.Distance < worldThreshold)
+                .OrderBy(x => x.Distance)
+                .Select(x => x.System)
+                .FirstOrDefault();
+        }
+
+        private SystemWaypoint FindClosestSystemWaypoint(Vector2 worldPoint, float worldThreshold)
+        {
+            if (_currentSystem?.Waypoints == null || _currentSystem.Waypoints.Count == 0) return null;
+
+            return _currentSystem.Waypoints
+                .Select(w => (Waypoint: w, Distance: Vector2.Distance(GetSystemWaypointWorldPosition(w), worldPoint)))
+                .Where(x => x.Distance < worldThreshold)
+                .OrderBy(x => x.Distance)
+                .Select(x => x.Waypoint)
+                .FirstOrDefault();
         }
 
         private class MapManipulator : Manipulator
