@@ -738,6 +738,31 @@ namespace SpaceTraders.UI
             HandleMapClick(localPoint);
         }
 
+        internal void SetFilteredSystemsForTest(List<DatabaseManager.IndexedSystem> systems)
+        {
+            _filteredSystems = systems;
+        }
+
+        internal void SetCurrentSystemForTest(SpaceTraders.Generated.Model.System system)
+        {
+            _currentSystem = system;
+        }
+
+        internal void SetMapModeForTest(bool systemMode)
+        {
+            _mapMode = systemMode ? MapMode.System : MapMode.Galaxy;
+        }
+
+        internal string GetSelectedSymbolForTest()
+        {
+            return _selectedSymbol;
+        }
+
+        internal string GetSelectedSystemSymbolForTest()
+        {
+            return _selectedSystemSymbol;
+        }
+
         private class MapManipulator : Manipulator
         {
             private readonly MapPresenter _p; private bool _a; private Vector2 _lm;
