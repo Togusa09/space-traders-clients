@@ -22,21 +22,24 @@ namespace SpaceTraders.UI
         private AuthManager _authManager;
         private SpaceTradersClient _client;
         private APIService _apiService;
-        private DatabaseManager _dbManager;
+        private IApiCacheRepository _apiCacheRepository;
+        private ISystemIndexRepository _systemIndexRepository;
         private UniverseSyncManager _syncManager;
 
         [Inject]
-        public void Construct(
+        internal void Construct(
             AuthManager authManager, 
             SpaceTradersClient client, 
             APIService apiService, 
-            DatabaseManager dbManager, 
+            IApiCacheRepository apiCacheRepository,
+            ISystemIndexRepository systemIndexRepository,
             UniverseSyncManager syncManager)
         {
             _authManager = authManager;
             _client = client;
             _apiService = apiService;
-            _dbManager = dbManager;
+            _apiCacheRepository = apiCacheRepository;
+            _systemIndexRepository = systemIndexRepository;
             _syncManager = syncManager;
         }
 
@@ -90,10 +93,9 @@ namespace SpaceTraders.UI
 
         private void UpdateStatus()
         {
-            if (_syncStatusLabel == null || _syncManager == null || _dbManager == null) return;
+            if (_syncStatusLabel == null || _syncManager == null || _systemIndexRepository == null) return;
 
             var sync = _syncManager;
-            var db = _dbManager;
 
             if (sync.IsSyncing)
             {
@@ -108,14 +110,14 @@ namespace SpaceTraders.UI
                 if (_stopSyncButton != null) _stopSyncButton.SetEnabled(false);
             }
 
-            if (_dbStatusLabel != null) _dbStatusLabel.text = db.GetIndexedSystemCount().ToString();
+            if (_dbStatusLabel != null) _dbStatusLabel.text = _systemIndexRepository.GetIndexedSystemCount().ToString();
         }
 
         private void OnStartSyncClicked() => _syncManager?.StartSync();
         private void OnStopSyncClicked() => _syncManager?.StopSync();
         private void OnClearCacheClicked()
         {
-            _dbManager?.ClearCache();
+            _apiCacheRepository?.ClearCache();
             UpdateStatus();
         }
 

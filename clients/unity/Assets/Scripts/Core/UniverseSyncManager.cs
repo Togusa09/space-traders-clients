@@ -24,20 +24,22 @@ namespace SpaceTraders.Core
         private CancellationTokenSource _cts;
 
         private APIService _apiService;
-        private DatabaseManager _dbManager;
+        private ISystemIndexRepository _systemIndexRepository;
+        private IJumpGateRepository _jumpGateRepository;
 
         [Inject]
-        public void Construct(APIService apiService, DatabaseManager dbManager)
+        internal void Construct(APIService apiService, ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository)
         {
             _apiService = apiService;
-            _dbManager = dbManager;
+            _systemIndexRepository = systemIndexRepository;
+            _jumpGateRepository = jumpGateRepository;
         }
 
         private void Start()
         {
-            if (_dbManager == null) return;
+            if (_systemIndexRepository == null) return;
 
-            int existingCount = _dbManager.GetIndexedSystemCount();
+            int existingCount = _systemIndexRepository.GetIndexedSystemCount();
             Log.Info("[UniverseSyncManager] Initial check. Indexed systems: {Count}", existingCount);
             
             if (existingCount == 0)
@@ -85,22 +87,22 @@ namespace SpaceTraders.Core
                     {
                         var pageResult = UniverseSyncPageWorker.ProcessPage(
                             response,
-                            _dbManager.GetAllSystems().ToDictionary(s => s.Symbol, s => s));
+                            _systemIndexRepository.GetAllSystems().ToDictionary(s => s.Symbol, s => s));
 
                         TotalSystemsExpected = pageResult.TotalSystemsExpected;
                         TotalPages = pageResult.TotalPages;
                         
                         Log.Info("[UniverseSyncManager] Received {Count} systems from API (Total Expected: {Total}).", response.Data.Count, TotalSystemsExpected);
 
-                        _dbManager.StoreSystems(pageResult.IndexedSystems);
+                        _systemIndexRepository.StoreSystems(pageResult.IndexedSystems);
 
                         if (pageResult.JumpGateWaypoints.Count > 0)
                         {
-                            _dbManager.StoreJumpGateWaypoints(pageResult.JumpGateWaypoints);
+                            _jumpGateRepository.StoreJumpGateWaypoints(pageResult.JumpGateWaypoints);
                             Log.Info("[UniverseSyncManager] Registered {Count} JUMP_GATE waypoints for connection sync.", pageResult.JumpGateWaypoints.Count);
                         }
 
-                        int newCount = _dbManager.GetIndexedSystemCount();
+                        int newCount = _systemIndexRepository.GetIndexedSystemCount();
                         Log.Info("[UniverseSyncManager] Page {Page} stored. Total indexed: {Total}", CurrentPage, newCount);
 
                         Progress = (float)CurrentPage / TotalPages;
@@ -136,7 +138,7 @@ namespace SpaceTraders.Core
         }
         private async Task SyncJumpGateConnectionsAsync(CancellationToken token)
         {
-            var pending = _dbManager.GetPendingJumpGates();
+            var pending = _jumpGateRepository.GetPendingJumpGates();
             if (pending.Count == 0)
             {
                 Log.Info("[UniverseSyncManager] No pending jump gate connections to fetch.");
@@ -154,7 +156,7 @@ namespace SpaceTraders.Core
                 {
                     var response = await _apiService.GetJumpGate(gate.SystemSymbol, gate.WaypointSymbol);
                     var connections = response?.Data?.Connections ?? new List<string>();
-                    _dbManager.StoreJumpGateConnections(gate.WaypointSymbol, connections);
+                    _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, connections);
                     fetched++;
                     Log.Info("[UniverseSyncManager] Jump gate {WP}: {Count} connection(s) stored. ({Done}/{Total})",
                         gate.WaypointSymbol, connections.Count, fetched, pending.Count);
@@ -164,7 +166,7 @@ namespace SpaceTraders.Core
                     Log.Warning("[UniverseSyncManager] Failed to fetch jump gate {WP}: {Error}",
                         gate.WaypointSymbol, e.Message);
                     // Store empty list so it is not retried on next launch unless ClearCache is called.
-                    _dbManager.StoreJumpGateConnections(gate.WaypointSymbol, new List<string>());
+                    _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, new List<string>());
                 }
 
                 await Task.Delay(1100, token);

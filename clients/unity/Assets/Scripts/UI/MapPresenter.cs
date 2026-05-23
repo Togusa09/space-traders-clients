@@ -76,7 +76,8 @@ namespace SpaceTraders.UI
         private Dictionary<string, DatabaseManager.IndexedSystem> _galaxySystemLookup = new Dictionary<string, DatabaseManager.IndexedSystem>();
         private readonly List<VisualElement> _listEntries = new List<VisualElement>();
 
-        private DatabaseManager _dbManager;
+        private ISystemIndexRepository _systemIndexRepository;
+        private IJumpGateRepository _jumpGateRepository;
         private APIService _apiService;
         private readonly MapRequestVersionGate _systemLoadGate = new MapRequestVersionGate();
 
@@ -102,9 +103,10 @@ namespace SpaceTraders.UI
         private const float GalaxyIconDetailZoomThreshold = 0.15f;
 
         [Inject]
-        public void Construct(DatabaseManager dbManager, APIService apiService)
+        internal void Construct(ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository, APIService apiService)
         {
-            _dbManager = dbManager;
+            _systemIndexRepository = systemIndexRepository;
+            _jumpGateRepository = jumpGateRepository;
             _apiService = apiService;
         }
 
@@ -165,9 +167,9 @@ namespace SpaceTraders.UI
             _mapContainer.AddManipulator(new MapManipulator(this));
 
             // Load Data
-            if (_dbManager != null)
+            if (_systemIndexRepository != null)
             {
-                _allGalaxySystems = _dbManager.GetAllSystems();
+                _allGalaxySystems = _systemIndexRepository.GetAllSystems();
                 RebuildGalaxyLookup();
                 LoadJumpGateConnections();
             }
@@ -289,7 +291,7 @@ namespace SpaceTraders.UI
                 }
                 _allGalaxySystems = loaded;
                 RebuildGalaxyLookup();
-                _dbManager?.StoreSystems(_allGalaxySystems);
+                _systemIndexRepository?.StoreSystems(_allGalaxySystems);
                 ApplyFilter();
                 ResetMapCamera();
                 RefreshMapUI();
@@ -301,8 +303,8 @@ namespace SpaceTraders.UI
 
         private void LoadJumpGateConnections()
         {
-            if (_dbManager == null) return;
-            var gates = _dbManager.GetAllJumpGateConnections();
+            if (_jumpGateRepository == null) return;
+            var gates = _jumpGateRepository.GetAllJumpGateConnections();
             _jumpGateSystemLinks.Clear();
             var seen = new HashSet<string>();
             foreach (var gate in gates)
@@ -503,7 +505,7 @@ namespace SpaceTraders.UI
             if (sys == null) return;
 
             sys.KnownFacilities = facilitiesCsv;
-            _dbManager?.StoreSystems(new[] { sys });
+            _systemIndexRepository?.StoreSystems(new[] { sys });
         }
 
         private void SelectSystemWaypoint(SystemWaypoint w)
