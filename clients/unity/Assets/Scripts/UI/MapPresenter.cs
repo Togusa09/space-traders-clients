@@ -252,14 +252,9 @@ namespace SpaceTraders.UI
             string typeFilter = _typeFilter?.value ?? "ALL";
             string facilityFilter = _facilityFilter?.value ?? "ALL";
 
-            _filteredSystems = _allGalaxySystems.Where(s => {
-                bool matchesQuery = string.IsNullOrEmpty(query) || s.Symbol.Contains(query);
-                string normType = s.Type.Replace("_", "").ToUpperInvariant();
-                string filterType = typeFilter.Replace("_", "").ToUpperInvariant();
-                bool matchesType = typeFilter == "ALL" || normType == filterType;
-                bool matchesFac = facilityFilter == "ALL" || (!string.IsNullOrEmpty(s.KnownFacilities) && s.KnownFacilities.Contains(facilityFilter));
-                return matchesQuery && matchesType && matchesFac;
-            }).ToList();
+            _filteredSystems = _allGalaxySystems
+                .Where(s => MapFilterMatcher.MatchesGalaxySystem(s, query, typeFilter, facilityFilter))
+                .ToList();
         }
 
         private async Task EnsureGalaxySystemsLoadedAsync()
@@ -402,12 +397,8 @@ namespace SpaceTraders.UI
 
         private bool WaypointMatches(SystemWaypoint w, Dictionary<string, List<SystemWaypoint>> cm, string s, string tf, string ff)
         {
-            bool ms = string.IsNullOrEmpty(s) || w.Symbol.Contains(s);
-            string nt = w.Type.ToString().Replace("_", "").ToUpperInvariant(), ft = tf.Replace("_", "").ToUpperInvariant();
-            bool mt = tf == "ALL" || nt == ft;
-            bool mf = ff == "ALL";
-            if (!mf) { var d = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == w.Symbol); mf = d != null && d.Traits.Any(t => t.Symbol.ToString().Replace("_", "") == ff.Replace("_", "")); }
-            if (ms && mt && mf) return true;
+            var detailed = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == w.Symbol);
+            if (MapFilterMatcher.MatchesWaypoint(w, detailed, s, tf, ff)) return true;
             return cm.TryGetValue(w.Symbol, out var children) && children.Any(c => WaypointMatches(c, cm, s, tf, ff));
         }
 
@@ -682,6 +673,51 @@ namespace SpaceTraders.UI
             private void OnPointerMove(PointerMoveEvent e) { if (_a) { _p.MapOffset += (Vector2)e.localPosition - _lm; _p.RefreshMapUI(); _lm = e.localPosition; e.StopPropagation(); } }
             private void OnPointerUp(PointerUpEvent e) { if (_a && (e.button == 1 || e.button == 2)) { _a = false; target.ReleasePointer(e.pointerId); e.StopPropagation(); } }
             private void OnWheel(WheelEvent e) { float d = -e.delta.y * 0.1f; float oz = _p.MapZoom; _p.MapZoom = Mathf.Clamp(_p.MapZoom * (1f + d), _p._minZoom, _p._maxZoom); _p.MapOffset = e.localMousePosition - ((e.localMousePosition - _p.MapOffset) / oz * _p.MapZoom); _p.RefreshMapUI(); e.StopPropagation(); }
+        }
+    }
+
+    internal static class MapFilterMatcher
+    {
+        public static bool MatchesGalaxySystem(DatabaseManager.IndexedSystem system, string query, string typeFilter, string facilityFilter)
+        {
+            bool matchesQuery = string.IsNullOrEmpty(query) || system.Symbol.Contains(query);
+            bool matchesType = IsTypeMatch(system.Type, typeFilter);
+            bool matchesFacility = IsFacilityStringMatch(system.KnownFacilities, facilityFilter);
+            return matchesQuery && matchesType && matchesFacility;
+        }
+
+        public static bool MatchesWaypoint(SystemWaypoint waypoint, Waypoint detailedWaypoint, string search, string typeFilter, string facilityFilter)
+        {
+            bool matchesSearch = string.IsNullOrEmpty(search) || waypoint.Symbol.Contains(search);
+            bool matchesType = IsTypeMatch(waypoint.Type.ToString(), typeFilter);
+            bool matchesFacility = IsWaypointFacilityMatch(detailedWaypoint, facilityFilter);
+            return matchesSearch && matchesType && matchesFacility;
+        }
+
+        private static bool IsTypeMatch(string candidateType, string typeFilter)
+        {
+            if (typeFilter == "ALL") return true;
+            return NormalizeToken(candidateType) == NormalizeToken(typeFilter);
+        }
+
+        private static bool IsFacilityStringMatch(string knownFacilities, string facilityFilter)
+        {
+            if (facilityFilter == "ALL") return true;
+            return !string.IsNullOrEmpty(knownFacilities) && knownFacilities.Contains(facilityFilter);
+        }
+
+        private static bool IsWaypointFacilityMatch(Waypoint detailedWaypoint, string facilityFilter)
+        {
+            if (facilityFilter == "ALL") return true;
+            if (detailedWaypoint?.Traits == null) return false;
+
+            string normalizedFacility = NormalizeToken(facilityFilter);
+            return detailedWaypoint.Traits.Any(t => NormalizeToken(t.Symbol.ToString()) == normalizedFacility);
+        }
+
+        private static string NormalizeToken(string value)
+        {
+            return (value ?? string.Empty).Replace("_", string.Empty).ToUpperInvariant();
         }
     }
 }
