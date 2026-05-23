@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
