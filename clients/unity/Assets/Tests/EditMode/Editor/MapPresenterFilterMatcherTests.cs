@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using NUnit.Framework;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
@@ -10,20 +9,9 @@ namespace SpaceTraders.Tests.EditMode.Editor
 {
     public class MapPresenterFilterMatcherTests
     {
-        private static Type GetMatcherType()
-        {
-            var matcherType = typeof(MapPresenter).Assembly.GetType("SpaceTraders.UI.MapFilterMatcher");
-            Assert.NotNull(matcherType, "Expected MapFilterMatcher type to exist.");
-            return matcherType;
-        }
-
         [Test]
         public void MatchesGalaxySystem_NormalizesTypeFilterToken()
         {
-            var matcherType = GetMatcherType();
-            var method = matcherType.GetMethod("MatchesGalaxySystem", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method, "Expected MatchesGalaxySystem method to exist.");
-
             var system = new DatabaseManager.IndexedSystem
             {
                 Symbol = "X1-TEST",
@@ -31,17 +19,13 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 KnownFacilities = "MARKETPLACE,SHIPYARD"
             };
 
-            var result = (bool)method.Invoke(null, new object[] { system, "X1", "NEUTRONSTAR", "ALL" });
+            var result = MapFilterMatcher.MatchesGalaxySystem(system, "X1", "NEUTRONSTAR", "ALL");
             Assert.IsTrue(result);
         }
 
         [Test]
         public void MatchesGalaxySystem_RespectsFacilityFilter()
         {
-            var matcherType = GetMatcherType();
-            var method = matcherType.GetMethod("MatchesGalaxySystem", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method, "Expected MatchesGalaxySystem method to exist.");
-
             var system = new DatabaseManager.IndexedSystem
             {
                 Symbol = "X1-TEST",
@@ -49,17 +33,13 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 KnownFacilities = "MARKETPLACE"
             };
 
-            var result = (bool)method.Invoke(null, new object[] { system, "", "ALL", "SHIPYARD" });
+            var result = MapFilterMatcher.MatchesGalaxySystem(system, "", "ALL", "SHIPYARD");
             Assert.IsFalse(result);
         }
 
         [Test]
         public void MatchesWaypoint_RespectsTraitFacilityFilter()
         {
-            var matcherType = GetMatcherType();
-            var method = matcherType.GetMethod("MatchesWaypoint", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method, "Expected MatchesWaypoint method to exist.");
-
             var waypoint = new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>());
             var detailedWaypoint = new Waypoint(
                 symbol: "X1-TEST-A",
@@ -74,30 +54,22 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 },
                 isUnderConstruction: false);
 
-            var result = (bool)method.Invoke(null, new object[] { waypoint, detailedWaypoint, "X1-TEST", "PLANET", "MARKETPLACE" });
+            var result = MapFilterMatcher.MatchesWaypoint(waypoint, detailedWaypoint, "X1-TEST", "PLANET", "MARKETPLACE");
             Assert.IsTrue(result);
         }
 
         [Test]
         public void MatchesWaypoint_FacilityFilterWithoutDetailedWaypoint_ReturnsFalse()
         {
-            var matcherType = GetMatcherType();
-            var method = matcherType.GetMethod("MatchesWaypoint", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method, "Expected MatchesWaypoint method to exist.");
-
             var waypoint = new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>());
 
-            var result = (bool)method.Invoke(null, new object[] { waypoint, null, "X1-TEST", "PLANET", "MARKETPLACE" });
+            var result = MapFilterMatcher.MatchesWaypoint(waypoint, null, "X1-TEST", "PLANET", "MARKETPLACE");
             Assert.IsFalse(result);
         }
 
         [Test]
         public void MatchesWaypoint_NormalizesTypeFilterToken()
         {
-            var matcherType = GetMatcherType();
-            var method = matcherType.GetMethod("MatchesWaypoint", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(method, "Expected MatchesWaypoint method to exist.");
-
             var waypoint = new SystemWaypoint("X1-TEST-A", WaypointType.ORBITALSTATION, 0, 0, new List<WaypointOrbital>());
             var detailedWaypoint = new Waypoint(
                 symbol: "X1-TEST-A",
@@ -109,7 +81,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 traits: new List<WaypointTrait>(),
                 isUnderConstruction: false);
 
-            var result = (bool)method.Invoke(null, new object[] { waypoint, detailedWaypoint, "X1", "ORBITAL_STATION", "ALL" });
+            var result = MapFilterMatcher.MatchesWaypoint(waypoint, detailedWaypoint, "X1", "ORBITAL_STATION", "ALL");
             Assert.IsTrue(result);
         }
     }
