@@ -50,18 +50,21 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void ToSystemWaypoints_MapsOrbitDataAndDefaultsNullOrbitals()
         {
+            var waypointWithNullOrbitals = new Waypoint(
+                symbol: "X1-WP-A",
+                type: WaypointType.ORBITALSTATION,
+                systemSymbol: "X1",
+                x: 10,
+                y: 20,
+                orbitals: new List<WaypointOrbital>(),
+                orbits: "X1-WP-PARENT",
+                traits: new List<WaypointTrait>(),
+                isUnderConstruction: false);
+            waypointWithNullOrbitals.Orbitals = null;
+
             var detailed = new List<Waypoint>
             {
-                new Waypoint(
-                    symbol: "X1-WP-A",
-                    type: WaypointType.ORBITALSTATION,
-                    systemSymbol: "X1",
-                    x: 10,
-                    y: 20,
-                    orbitals: null,
-                    orbits: "X1-WP-PARENT",
-                    traits: new List<WaypointTrait>(),
-                    isUnderConstruction: false)
+                waypointWithNullOrbitals
             };
 
             var result = MapDataProjection.ToSystemWaypoints(detailed);
