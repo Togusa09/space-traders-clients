@@ -96,18 +96,23 @@ namespace SpaceTraders.UI
 
             if (tab == Tab.Map)
             {
-                if (_mapPresenter != null)
-                {
-                    _mapPresenter.SetupMapPanel(_dataContainer);
-                }
-                else
-                {
-                    _dataContainer.Add(new Label("MapPresenter component not found on Dashboard GameObject."));
-                }
+                DisplayMapTab();
                 return;
             }
 
             _ = FetchAndDisplayTab(tab);
+        }
+
+        private void DisplayMapTab()
+        {
+            if (_mapPresenter != null)
+            {
+                _mapPresenter.SetupMapPanel(_dataContainer);
+            }
+            else
+            {
+                _dataContainer.Add(new Label("MapPresenter component not found on Dashboard GameObject."));
+            }
         }
 
         private async Task FetchAndDisplayTab(Tab tab)
@@ -118,25 +123,7 @@ namespace SpaceTraders.UI
             {
                 _client.SetToken(_authManager.AgentToken);
 
-                switch (tab)
-                {
-                    case Tab.Agent:
-                        var agentRes = await _apiService.GetMyAgent();
-                        DisplayAgent(agentRes.Data);
-                        break;
-                    case Tab.Contracts:
-                        var contractRes = await _apiService.GetContracts();
-                        DisplayContracts(contractRes.Data.ToArray());
-                        break;
-                    case Tab.Fleet:
-                        var fleetRes = await _apiService.GetShips();
-                        DisplayFleet(fleetRes.Data.ToArray());
-                        break;
-                    case Tab.Factions:
-                        var factionsRes = await _apiService.GetFactions();
-                        DisplayFactions(factionsRes.Data.ToArray());
-                        break;
-                }
+                await FetchAndRenderTabData(tab);
 
                 if (_statusLabel != null) _statusLabel.text = string.Empty;
             }
@@ -144,6 +131,29 @@ namespace SpaceTraders.UI
             {
                 Log.Error("[Dashboard] Refresh failed: {Error}", e.Message);
                 if (_statusLabel != null) _statusLabel.text = $"Error: {e.Message}";
+            }
+        }
+
+        private async Task FetchAndRenderTabData(Tab tab)
+        {
+            switch (tab)
+            {
+                case Tab.Agent:
+                    var agentRes = await _apiService.GetMyAgent();
+                    DisplayAgent(agentRes.Data);
+                    break;
+                case Tab.Contracts:
+                    var contractRes = await _apiService.GetContracts();
+                    DisplayContracts(contractRes.Data.ToArray());
+                    break;
+                case Tab.Fleet:
+                    var fleetRes = await _apiService.GetShips();
+                    DisplayFleet(fleetRes.Data.ToArray());
+                    break;
+                case Tab.Factions:
+                    var factionsRes = await _apiService.GetFactions();
+                    DisplayFactions(factionsRes.Data.ToArray());
+                    break;
             }
         }
 
