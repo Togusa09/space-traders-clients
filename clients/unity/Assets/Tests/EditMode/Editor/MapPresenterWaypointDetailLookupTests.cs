@@ -24,8 +24,24 @@ namespace SpaceTraders.Tests.EditMode.Editor
             var method = GetFindBySymbolMethod();
             var waypoints = new List<Waypoint>
             {
-                new Waypoint("X1-A", WaypointType.PLANET, "X1", 0, 0, new List<WaypointOrbital>(), new List<WaypointTrait>(), false),
-                new Waypoint("X1-B", WaypointType.MOON, "X1", 1, 1, new List<WaypointOrbital>(), new List<WaypointTrait>(), false)
+                new Waypoint(
+                    symbol: "X1-A",
+                    type: WaypointType.PLANET,
+                    systemSymbol: "X1",
+                    x: 0,
+                    y: 0,
+                    orbitals: new List<WaypointOrbital>(),
+                    traits: new List<WaypointTrait>(),
+                    isUnderConstruction: false),
+                new Waypoint(
+                    symbol: "X1-B",
+                    type: WaypointType.MOON,
+                    systemSymbol: "X1",
+                    x: 1,
+                    y: 1,
+                    orbitals: new List<WaypointOrbital>(),
+                    traits: new List<WaypointTrait>(),
+                    isUnderConstruction: false)
             };
 
             var result = (Waypoint)method.Invoke(null, new object[] { waypoints, "X1-B" });
@@ -40,7 +56,15 @@ namespace SpaceTraders.Tests.EditMode.Editor
             var method = GetFindBySymbolMethod();
             var waypoints = new List<Waypoint>
             {
-                new Waypoint("X1-A", WaypointType.PLANET, "X1", 0, 0, new List<WaypointOrbital>(), new List<WaypointTrait>(), false)
+                new Waypoint(
+                    symbol: "X1-A",
+                    type: WaypointType.PLANET,
+                    systemSymbol: "X1",
+                    x: 0,
+                    y: 0,
+                    orbitals: new List<WaypointOrbital>(),
+                    traits: new List<WaypointTrait>(),
+                    isUnderConstruction: false)
             };
 
             var result = (Waypoint)method.Invoke(null, new object[] { waypoints, "X1-NOT-FOUND" });
