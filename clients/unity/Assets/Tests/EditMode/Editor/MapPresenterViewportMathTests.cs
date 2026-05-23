@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -49,11 +48,17 @@ namespace SpaceTraders.Tests.EditMode.Editor
 
             var offsetProp = result.GetType().GetProperty("Item1") ?? result.GetType().GetProperty("Offset");
             var zoomProp = result.GetType().GetProperty("Item2") ?? result.GetType().GetProperty("Zoom");
-            Assert.NotNull(offsetProp, "Expected offset value in FitBounds result.");
-            Assert.NotNull(zoomProp, "Expected zoom value in FitBounds result.");
+            var offsetField = result.GetType().GetField("Item1") ?? result.GetType().GetField("Offset");
+            var zoomField = result.GetType().GetField("Item2") ?? result.GetType().GetField("Zoom");
 
-            var offset = (Vector2)offsetProp.GetValue(result);
-            var zoom = Convert.ToSingle(zoomProp.GetValue(result));
+            object offsetValue = offsetProp != null ? offsetProp.GetValue(result) : offsetField?.GetValue(result);
+            object zoomValue = zoomProp != null ? zoomProp.GetValue(result) : zoomField?.GetValue(result);
+
+            Assert.NotNull(offsetValue, "Expected offset value in FitBounds result.");
+            Assert.NotNull(zoomValue, "Expected zoom value in FitBounds result.");
+
+            var offset = (Vector2)offsetValue;
+            var zoom = Convert.ToSingle(zoomValue);
 
             Assert.That(offset.x, Is.EqualTo(200f).Within(0.0001f));
             Assert.That(offset.y, Is.EqualTo(150f).Within(0.0001f));
