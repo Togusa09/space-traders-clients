@@ -88,13 +88,25 @@ namespace SpaceTraders.Core
                         
                         Log.Info("[UniverseSyncManager] Received {Count} systems from API (Total Expected: {Total}).", response.Data.Count, TotalSystemsExpected);
 
-                        var indexed = response.Data.Select(s => new DatabaseManager.IndexedSystem {
-                            Symbol = s.Symbol,
-                            SectorSymbol = s.SectorSymbol,
-                            Type = s.Type.ToString(),
-                            X = s.X,
-                            Y = s.Y,
-                            WaypointCount = s.Waypoints != null ? s.Waypoints.Count : 0
+                        var existingSystems = _dbManager.GetAllSystems().ToDictionary(s => s.Symbol, s => s);
+
+                        var indexed = response.Data.Select(s => {
+                            var system = new DatabaseManager.IndexedSystem {
+                                Symbol = s.Symbol,
+                                SectorSymbol = s.SectorSymbol,
+                                Type = s.Type.ToString(),
+                                X = s.X,
+                                Y = s.Y,
+                                WaypointCount = s.Waypoints != null ? s.Waypoints.Count : 0
+                            };
+                            
+                            // Preserve known facilities if they exist in the DB
+                            if (existingSystems.TryGetValue(s.Symbol, out var existing))
+                            {
+                                system.KnownFacilities = existing.KnownFacilities;
+                            }
+                            
+                            return system;
                         }).ToList();
 
                         _dbManager.StoreSystems(indexed);

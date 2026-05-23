@@ -338,6 +338,7 @@ namespace SpaceTraders.Core
             public int X { get; set; }
             public int Y { get; set; }
             public int WaypointCount { get; set; }
+            public string KnownFacilities { get; set; }
         }
 
         [Table("jump_gate_index")]
