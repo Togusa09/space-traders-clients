@@ -398,7 +398,7 @@ namespace SpaceTraders.UI
                 cm,
                 waypoint =>
                 {
-                    var detailed = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == waypoint.Symbol);
+                    var detailed = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, waypoint.Symbol);
                     return MapFilterMatcher.MatchesWaypoint(waypoint, detailed, s, tf, ff);
                 });
         }
@@ -466,14 +466,14 @@ namespace SpaceTraders.UI
             ApplySystemWaypointSelectionDetails(w);
             CenterMapOnWorldPosition(GetSystemWaypointWorldPosition(w));
             RefreshMapUI();
-            var d = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == w.Symbol);
+            var d = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, w.Symbol);
             if (d != null) SelectWaypoint(d); else _ = FetchDetailedWaypointAndSelectAsync(w.Symbol);
         }
 
         private async Task FetchDetailedWaypointAndSelectAsync(string ws)
         {
             if (_currentSystem == null) return;
-            try { var res = await _apiService.GetSystemWaypoints(_currentSystem.Symbol); if (res?.Data != null) { _detailedWaypoints = res.Data; var d = res.Data.FirstOrDefault(x => x.Symbol == ws); if (d != null) SelectWaypoint(d); } } catch { }
+            try { var res = await _apiService.GetSystemWaypoints(_currentSystem.Symbol); if (res?.Data != null) { _detailedWaypoints = res.Data; var d = MapWaypointDetailLookup.FindBySymbol(res.Data, ws); if (d != null) SelectWaypoint(d); } } catch { }
         }
 
         private void SelectWaypoint(Waypoint w) { if (w == null) return; _selectedWaypoint = w; _selectedSymbol = w.Symbol; ApplyWaypointSelectionDetails(w); RefreshMapUI(); }
@@ -763,6 +763,15 @@ namespace SpaceTraders.UI
             }
 
             return false;
+        }
+    }
+
+    internal static class MapWaypointDetailLookup
+    {
+        public static Waypoint FindBySymbol(IEnumerable<Waypoint> detailedWaypoints, string symbol)
+        {
+            if (detailedWaypoints == null || string.IsNullOrEmpty(symbol)) return null;
+            return detailedWaypoints.FirstOrDefault(x => x.Symbol == symbol);
         }
     }
 
