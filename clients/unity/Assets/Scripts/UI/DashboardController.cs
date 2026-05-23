@@ -170,11 +170,7 @@ namespace SpaceTraders.UI
         private void DisplayAgent(Agent agent)
         {
             var root = GetContentRoot();
-            AddRow(root, "Symbol", agent.Symbol);
-            AddRow(root, "Headquarters", agent.Headquarters);
-            AddRow(root, "Credits", agent.Credits.ToString("N0"));
-            AddRow(root, "Starting Faction", agent.StartingFaction);
-            AddRow(root, "AccountId", agent.AccountId);
+            DashboardViewRenderer.RenderAgent(root, agent);
         }
 
         private void DisplayContracts(Contract[] contracts)
@@ -226,27 +222,8 @@ namespace SpaceTraders.UI
             var scroll = (ScrollView)GetContentRoot();
             foreach (var f in factions)
             {
-                scroll.Add(BindFaction(f));
+                scroll.Add(DashboardViewRenderer.BindFaction(f, factionTemplate));
             }
-        }
-
-        private VisualElement BindFaction(Faction f)
-        {
-            if (factionTemplate == null) return new Label($"{f.Name} ({f.Symbol})");
-            
-            var element = factionTemplate.Instantiate();
-            element.Q<Label>("name-label").text = $"Name: {f.Name}";
-            element.Q<Label>("details-label").text = $"Symbol: {f.Symbol} | HQ: {f.Headquarters}";
-            element.Q<Label>("description-label").text = f.Description;
-            return element;
-        }
-
-        private void AddRow(VisualElement root, string key, string value)
-        {
-            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };    
-            row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
-            row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
-            root.Add(row);
         }
 
         // --- Polling for active views ---
@@ -270,6 +247,37 @@ namespace SpaceTraders.UI
         public static bool ShouldPoll(DashboardController.Tab tab)
         {
             return tab != DashboardController.Tab.Map && tab != DashboardController.Tab.Agent;
+        }
+    }
+
+    internal static class DashboardViewRenderer
+    {
+        public static void RenderAgent(VisualElement root, Agent agent)
+        {
+            AddRow(root, "Symbol", agent.Symbol);
+            AddRow(root, "Headquarters", agent.Headquarters);
+            AddRow(root, "Credits", agent.Credits.ToString("N0"));
+            AddRow(root, "Starting Faction", agent.StartingFaction);
+            AddRow(root, "AccountId", agent.AccountId);
+        }
+
+        public static VisualElement BindFaction(Faction faction, VisualTreeAsset factionTemplate)
+        {
+            if (factionTemplate == null) return new Label($"{faction.Name} ({faction.Symbol})");
+
+            var element = factionTemplate.Instantiate();
+            element.Q<Label>("name-label").text = $"Name: {faction.Name}";
+            element.Q<Label>("details-label").text = $"Symbol: {faction.Symbol} | HQ: {faction.Headquarters}";
+            element.Q<Label>("description-label").text = faction.Description;
+            return element;
+        }
+
+        private static void AddRow(VisualElement root, string key, string value)
+        {
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };
+            row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
+            row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
+            root.Add(row);
         }
     }
 

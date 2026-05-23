@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using NUnit.Framework;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
@@ -21,10 +20,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 new DatabaseManager.IndexedSystem { Symbol = "B-SYS", X = 10, Y = 0 }
             });
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestGalaxySystem", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestGalaxySystem to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(2.0f, 0f), 5.0f }) as DatabaseManager.IndexedSystem;
+            var result = presenter.FindClosestGalaxySystemForTest(new Vector2(2.0f, 0f), 5.0f);
 
             Assert.NotNull(result);
             Assert.AreEqual("A-SYS", result.Symbol);
@@ -50,10 +46,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
 
             SetPrivateField(presenter, "_currentSystem", currentSystem);
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestSystemWaypoint", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestSystemWaypoint to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(100f, 100f), 3.0f }) as SystemWaypoint;
+            var result = presenter.FindClosestSystemWaypointForTest(new Vector2(100f, 100f), 3.0f);
 
             Assert.IsNull(result);
         }
@@ -78,10 +71,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
 
             SetPrivateField(presenter, "_currentSystem", currentSystem);
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestSystemWaypoint", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestSystemWaypoint to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(1f, 0f), 5.0f }) as SystemWaypoint;
+            var result = presenter.FindClosestSystemWaypointForTest(new Vector2(1f, 0f), 5.0f);
 
             Assert.NotNull(result);
             Assert.AreEqual("X1-TEST-A", result.Symbol);
@@ -97,10 +87,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
             });
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestGalaxySystem", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestGalaxySystem to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(100f, 100f), 2.0f }) as DatabaseManager.IndexedSystem;
+            var result = presenter.FindClosestGalaxySystemForTest(new Vector2(100f, 100f), 2.0f);
 
             Assert.IsNull(result);
         }
@@ -119,10 +106,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
-
-            method.Invoke(presenter, new object[] { new Vector2(1f, 0f) });
+            presenter.HandleMapClickForTest(new Vector2(1f, 0f));
 
             Assert.AreEqual("A-SYS", GetPrivateField<string>(presenter, "_selectedSymbol"));
             Assert.AreEqual("A-SYS", GetPrivateField<string>(presenter, "_selectedSystemSymbol"));
@@ -151,10 +135,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
-
-            method.Invoke(presenter, new object[] { new Vector2(2f, 0f) });
+            presenter.HandleMapClickForTest(new Vector2(2f, 0f));
 
             Assert.AreEqual("X1-TEST-A", GetPrivateField<string>(presenter, "_selectedSymbol"));
         }
@@ -172,10 +153,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
-
-            method.Invoke(presenter, new object[] { new Vector2(100f, 100f) });
+            presenter.HandleMapClickForTest(new Vector2(100f, 100f));
 
             Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSymbol"));
             Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSystemSymbol"));
@@ -203,10 +181,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
-
-            method.Invoke(presenter, new object[] { new Vector2(100f, 100f) });
+            presenter.HandleMapClickForTest(new Vector2(100f, 100f));
 
             Assert.IsNull(GetPrivateField<string>(presenter, "_selectedSymbol"));
         }

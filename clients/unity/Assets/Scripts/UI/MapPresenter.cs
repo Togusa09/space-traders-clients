@@ -712,6 +712,11 @@ namespace SpaceTraders.UI
                 GetGalaxySystemWorldPosition);
         }
 
+        internal DatabaseManager.IndexedSystem FindClosestGalaxySystemForTest(Vector2 worldPoint, float worldThreshold)
+        {
+            return FindClosestGalaxySystem(worldPoint, worldThreshold);
+        }
+
         private SystemWaypoint FindClosestSystemWaypoint(Vector2 worldPoint, float worldThreshold)
         {
             return MapSelectionMath.FindClosest(
@@ -719,6 +724,16 @@ namespace SpaceTraders.UI
                 worldPoint,
                 worldThreshold,
                 GetSystemWaypointWorldPosition);
+        }
+
+        internal SystemWaypoint FindClosestSystemWaypointForTest(Vector2 worldPoint, float worldThreshold)
+        {
+            return FindClosestSystemWaypoint(worldPoint, worldThreshold);
+        }
+
+        internal void HandleMapClickForTest(Vector2 localPoint)
+        {
+            HandleMapClick(localPoint);
         }
 
         private class MapManipulator : Manipulator
