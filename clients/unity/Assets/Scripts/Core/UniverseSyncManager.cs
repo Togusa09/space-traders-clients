@@ -136,14 +136,11 @@ namespace SpaceTraders.Core
 
                         Progress = TotalSystemsExpected > 0 ? (float)newCount / TotalSystemsExpected : 0f;
                         CurrentPage++;
-                        
-                        // Respect Rate Limits
-                        await Task.Delay(1100, token);
                     }
                     else
                     {
                         Log.Error("[UniverseSyncManager] Sync failed on page {Page}: No data in response", CurrentPage);
-                        await Task.Delay(5000, token);
+                        await Task.Delay(5000, token); // Keep this for actual failures
                     }
 
                 } while (CurrentPage <= TotalPages);
@@ -219,8 +216,6 @@ namespace SpaceTraders.Core
                     _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, new List<string>());
                     PendingJumpGates--;
                 }
-
-                await Task.Delay(1100, token);
             }
 
             Log.Info("[UniverseSyncManager] Phase 2 complete. Fetched connections for {Done} jump gate(s).", fetched);
