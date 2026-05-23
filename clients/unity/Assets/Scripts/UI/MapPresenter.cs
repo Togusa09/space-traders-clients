@@ -393,9 +393,14 @@ namespace SpaceTraders.UI
 
         private bool WaypointMatches(SystemWaypoint w, Dictionary<string, List<SystemWaypoint>> cm, string s, string tf, string ff)
         {
-            var detailed = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == w.Symbol);
-            if (MapFilterMatcher.MatchesWaypoint(w, detailed, s, tf, ff)) return true;
-            return cm.TryGetValue(w.Symbol, out var children) && children.Any(c => WaypointMatches(c, cm, s, tf, ff));
+            return MapWaypointTreeFilter.HasMatchInSubtree(
+                w,
+                cm,
+                waypoint =>
+                {
+                    var detailed = _detailedWaypoints?.FirstOrDefault(x => x.Symbol == waypoint.Symbol);
+                    return MapFilterMatcher.MatchesWaypoint(waypoint, detailed, s, tf, ff);
+                });
         }
 
         private void AddWaypointEntry(SystemWaypoint w, int ind)
@@ -739,6 +744,25 @@ namespace SpaceTraders.UI
                 .OrderBy(x => x.Distance)
                 .Select(x => x.Item)
                 .FirstOrDefault();
+        }
+    }
+
+    internal static class MapWaypointTreeFilter
+    {
+        public static bool HasMatchInSubtree(SystemWaypoint waypoint, Dictionary<string, List<SystemWaypoint>> childMap, Func<SystemWaypoint, bool> isMatch)
+        {
+            if (waypoint == null || isMatch == null) return false;
+
+            if (isMatch(waypoint)) return true;
+            if (childMap == null) return false;
+            if (!childMap.TryGetValue(waypoint.Symbol, out var children) || children == null) return false;
+
+            foreach (var child in children)
+            {
+                if (HasMatchInSubtree(child, childMap, isMatch)) return true;
+            }
+
+            return false;
         }
     }
 

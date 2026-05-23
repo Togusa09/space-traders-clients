@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using SpaceTraders.UI;
 using UnityEngine;
 
 namespace SpaceTraders.Tests.EditMode.Editor
@@ -16,7 +17,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
 
         private static MethodInfo GetFindClosestMethod()
         {
-            var type = Type.GetType("SpaceTraders.UI.MapSelectionMath, Assembly-CSharp");
+            var type = typeof(MapPresenter).Assembly.GetType("SpaceTraders.UI.MapSelectionMath");
             Assert.NotNull(type, "Expected MapSelectionMath type to exist.");
 
             var method = type.GetMethod("FindClosest", BindingFlags.Public | BindingFlags.Static);
