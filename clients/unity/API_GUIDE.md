@@ -67,7 +67,7 @@ The project uses Unity's **UI Toolkit** for its interface.
 - **Script**: `RegistrationUI.cs`
 - **Logic**: Facilitates new agent registration via the API.
 
-### 4. Gameplay Placeholder (`GameplayPlaceholder` scene)
+### 4. Gameplay (`Gameplay` scene)
 - A simple scene serving as the destination for the `PLAY` button.
 
 ## Styling

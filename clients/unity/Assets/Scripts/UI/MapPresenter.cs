@@ -640,15 +640,28 @@ namespace SpaceTraders.UI
 
         private IconStyle GetSystemStyle(DatabaseManager.IndexedSystem s)
         {
-            var st = new IconStyle { Radius = 3f, StrokeWidth = 0, FillColor = Color.white, Shape = IconShape.Circle }; string t = s.Type.Replace("_", "");
-            if (t == "REDSTAR") st.FillColor = new Color(1f, 0.4f, 0.4f); else if (t == "BLUESTAR") st.FillColor = new Color(0.4f, 0.4f, 1f); else if (t == "YOUNGSTAR") st.FillColor = new Color(0.6f, 1f, 1f); else if (t == "WHITEDWARF") { st.FillColor = Color.white; st.Radius = 2f; } else if (t == "BLACKHOLE") { st.FillColor = Color.black; st.StrokeColor = Color.purple; st.StrokeWidth = 1f; } else if (t == "NEBULA") { st.FillColor = new Color(1f, 0.2f, 1f, 0.4f); st.Shape = IconShape.Square; st.Radius = 5f; }
+            var st = new IconStyle { Radius = 3f, StrokeWidth = 0, FillColor = Color.white, Shape = IconShape.Circle };
+            string t = s.Type.Replace("_", "");
+            if (t == "REDSTAR") st.FillColor = new Color(1f, 0.4f, 0.4f);
+            else if (t == "BLUESTAR") st.FillColor = new Color(0.4f, 0.4f, 1f);
+            else if (t == "YOUNGSTAR") st.FillColor = new Color(0.6f, 1f, 1f);
+            else if (t == "WHITEDWARF") { st.FillColor = Color.white; st.Radius = 2f; }
+            else if (t == "BLACKHOLE") { st.FillColor = Color.black; st.StrokeColor = Color.purple; st.StrokeWidth = 1f; }
+            else if (t == "NEBULA") { st.FillColor = new Color(1f, 0.2f, 1f, 0.4f); st.Shape = IconShape.Square; st.Radius = 5f; }
             return st;
         }
 
         private IconStyle GetWaypointStyle(SystemWaypoint w)
         {
             var st = new IconStyle { Radius = 4f, StrokeWidth = 0, FillColor = Color.white, Shape = IconShape.Circle };
-            switch (w.Type) { case WaypointType.PLANET: st.FillColor = new Color(0.2f, 0.6f, 1f); break; case WaypointType.MOON: st.FillColor = Color.gray; st.Radius = 2f; break; case WaypointType.ORBITALSTATION: st.FillColor = Color.yellow; st.Shape = IconShape.Square; st.Radius = 3f; break; case WaypointType.JUMPGATE: st.FillColor = new Color(0.7f, 0f, 1f); st.Shape = IconShape.Diamond; break; case WaypointType.ASTEROIDFIELD: st.FillColor = new Color(0.5f, 0.4f, 0.3f); st.Shape = IconShape.Hexagon; break; }
+            switch (w.Type)
+            {
+                case WaypointType.PLANET: st.FillColor = new Color(0.2f, 0.6f, 1f); break;
+                case WaypointType.MOON: st.FillColor = Color.gray; st.Radius = 2f; break;
+                case WaypointType.ORBITALSTATION: st.FillColor = Color.yellow; st.Shape = IconShape.Square; st.Radius = 3f; break;
+                case WaypointType.JUMPGATE: st.FillColor = new Color(0.7f, 0f, 1f); st.Shape = IconShape.Diamond; break;
+                case WaypointType.ASTEROIDFIELD: st.FillColor = new Color(0.5f, 0.4f, 0.3f); st.Shape = IconShape.Hexagon; break;
+            }
             return st;
         }
 
@@ -664,7 +677,7 @@ namespace SpaceTraders.UI
             private readonly MapPresenter _p; private bool _a; private Vector2 _lm;
             public MapManipulator(MapPresenter p) { _p = p; }
             protected override void RegisterCallbacksOnTarget() { target.RegisterCallback<PointerDownEvent>(OnPointerDown); target.RegisterCallback<PointerMoveEvent>(OnPointerMove); target.RegisterCallback<PointerUpEvent>(OnPointerUp); target.RegisterCallback<WheelEvent>(OnWheel); }
-            protected override void UnregisterCallbacksFromTarget() { target.UnregisterCallback<PointerDownEvent>(OnPointerDown); target.RegisterCallback<PointerMoveEvent>(OnPointerMove); target.RegisterCallback<PointerUpEvent>(OnPointerUp); target.RegisterCallback<WheelEvent>(OnWheel); }
+            protected override void UnregisterCallbacksFromTarget() { target.UnregisterCallback<PointerDownEvent>(OnPointerDown); target.UnregisterCallback<PointerMoveEvent>(OnPointerMove); target.UnregisterCallback<PointerUpEvent>(OnPointerUp); target.UnregisterCallback<WheelEvent>(OnWheel); }
             private void OnPointerDown(PointerDownEvent e) { if (e.button == 0) { _p.HandleMapClick(e.localPosition); e.StopPropagation(); return; } if (e.button == 1 || e.button == 2) { _a = true; _lm = e.localPosition; target.CapturePointer(e.pointerId); e.StopPropagation(); } }
             private void OnPointerMove(PointerMoveEvent e) { if (_a) { _p.MapOffset += (Vector2)e.localPosition - _lm; _p.RefreshMapUI(); _lm = e.localPosition; e.StopPropagation(); } }
             private void OnPointerUp(PointerUpEvent e) { if (_a && (e.button == 1 || e.button == 2)) { _a = false; target.ReleasePointer(e.pointerId); e.StopPropagation(); } }

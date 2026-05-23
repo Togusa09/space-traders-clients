@@ -77,7 +77,7 @@ namespace SpaceTraders.UI
             _dbStatusLabel = root.Q<Label>("db-count");
 
             if (_saveButton != null) _saveButton.clicked += OnSaveClicked;
-            if (_backButton != null) _backButton.clicked += () => SceneManager.LoadScene("MainMenu");
+            if (_backButton != null) _backButton.clicked += () => SceneManager.LoadScene(SceneNames.MainMenu);
             if (_startSyncButton != null) _startSyncButton.clicked += OnStartSyncClicked;
             if (_stopSyncButton != null) _stopSyncButton.clicked += OnStopSyncClicked;
             if (_clearCacheButton != null) _clearCacheButton.clicked += OnClearCacheClicked;

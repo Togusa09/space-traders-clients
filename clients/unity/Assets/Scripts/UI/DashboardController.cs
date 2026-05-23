@@ -72,7 +72,7 @@ namespace SpaceTraders.UI
 
             // Bind Global Buttons
             var backBtn = _root.Q<Button>("back-button");
-            if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene("MainMenu");
+            if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene(SceneNames.MainMenu);
 
             // Bind Sidebar/Tab Buttons
             _root.Q<Button>("tab-agent")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Agent));

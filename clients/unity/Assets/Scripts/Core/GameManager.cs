@@ -20,7 +20,7 @@ namespace SpaceTraders.Core
         public void OnRegistrationSuccess(string token)
         {
             _authManager.SaveAgentToken(token);
-            SceneManager.LoadScene("MainMenu");
+            SceneManager.LoadScene(SceneNames.MainMenu);
         }
     }
 }
