@@ -94,6 +94,7 @@ namespace SpaceTraders.UI
         private float _minZoom = 0.00001f;
         private float _maxZoom = 2000f;
         private MapMode _mapMode = MapMode.Galaxy;
+        private string _pendingExternalSystemSymbol;
         private int _currentPage = 1;
         private const int PageSize = 50;
         private bool _legendExpanded = true;
@@ -179,6 +180,7 @@ namespace SpaceTraders.UI
 
             RefreshLegend();
             UpdateModeChrome();
+            TryApplyPendingExternalSystemSelection();
             
             // Fallback for initial focus
             _mapContainer.schedule.Execute(() => {
@@ -186,6 +188,56 @@ namespace SpaceTraders.UI
             }).StartingIn(100);
             
             Log.Info("[MapPresenter] Map panel setup complete.");
+        }
+
+        public void FocusSystemFromWaypoint(string waypointSymbol)
+        {
+            var systemSymbol = GetSystemSymbolFromWaypoint(waypointSymbol);
+            FocusSystem(systemSymbol);
+        }
+
+        public void FocusSystem(string systemSymbol)
+        {
+            if (string.IsNullOrWhiteSpace(systemSymbol))
+            {
+                return;
+            }
+
+            _pendingExternalSystemSymbol = systemSymbol;
+            TryApplyPendingExternalSystemSelection();
+        }
+
+        public static string GetSystemSymbolFromWaypoint(string waypointSymbol)
+        {
+            if (string.IsNullOrWhiteSpace(waypointSymbol))
+            {
+                return null;
+            }
+
+            var parts = waypointSymbol.Split('-');
+            if (parts.Length >= 2)
+            {
+                return $"{parts[0]}-{parts[1]}";
+            }
+
+            return waypointSymbol;
+        }
+
+        private void TryApplyPendingExternalSystemSelection()
+        {
+            if (string.IsNullOrWhiteSpace(_pendingExternalSystemSymbol))
+            {
+                return;
+            }
+
+            if (_mapContainer == null || _systemList == null || _apiService == null)
+            {
+                return;
+            }
+
+            var target = _pendingExternalSystemSymbol;
+            _pendingExternalSystemSymbol = null;
+            SelectSystem(target);
         }
 
         private void InitializeFilterOptions()
@@ -586,7 +638,17 @@ namespace SpaceTraders.UI
                     await Task.WhenAll(mT, sT, cT);
                     bool any = false;
                     if (mT.Result?.Data != null) { any = true; var b = new Button(() => Log.Info("Market")) { text = "OPEN MARKET" }; b.AddToClassList("button"); _extraContentContainer.Add(b); }
-                    if (sT.Result?.Data != null) { any = true; var b = new Button(() => Log.Info("Shipyard")) { text = "OPEN SHIPYARD" }; b.AddToClassList("button"); _extraContentContainer.Add(b); }
+                    if (sT.Result?.Data != null)
+                    {
+                        any = true;
+                        var b = new Button(() => {
+                            var dashboard = GetComponent<DashboardController>();
+                            if (dashboard != null) dashboard.ShowShipyard(ws);
+                            else Log.Error("[MapPresenter] DashboardController not found to show shipyard.");
+                        }) { text = "OPEN SHIPYARD" };
+                        b.AddToClassList("button");
+                        _extraContentContainer.Add(b);
+                    }
                     if (cT.Result?.Data != null && !cT.Result.Data.IsComplete) { any = true; _extraContentContainer.Add(new Label("Construction in progress.")); }
                     if (!any) _extraContentContainer.Add(new Label("No specialized info."));
                 }

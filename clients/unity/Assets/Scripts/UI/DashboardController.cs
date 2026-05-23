@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using SpaceTraders.API;
@@ -13,7 +14,7 @@ namespace SpaceTraders.UI
 {
     public class DashboardController : MonoBehaviour
     {
-        public enum Tab { Agent, Contracts, Fleet, Map, Factions }
+        public enum Tab { Agent, Contracts, Fleet, Map, Factions, Shipyard }
 
         [Header("Item Templates")]
         [SerializeField] private VisualTreeAsset factionTemplate;
@@ -26,12 +27,14 @@ namespace SpaceTraders.UI
         private ContractPresenter _contractPresenter;
         private FleetPresenter _fleetPresenter;
         private MapPresenter _mapPresenter;
+        private ShipyardPresenter _shipyardPresenter;
 
         private SpaceTradersClient _client;
         private AuthManager _authManager;
         private APIService _apiService;
 
         private Tab _currentTab = Tab.Agent;
+        private int _tabRequestVersion;
 
         [Inject]
         public void Construct(SpaceTradersClient client, AuthManager authManager, APIService apiService)
@@ -46,10 +49,12 @@ namespace SpaceTraders.UI
             _contractPresenter = GetComponent<ContractPresenter>();
             _fleetPresenter = GetComponent<FleetPresenter>();
             _mapPresenter = GetComponent<MapPresenter>();
+            _shipyardPresenter = GetComponent<ShipyardPresenter>();
 
             InitializeUI();
             SwitchTab(Tab.Agent);
         }
+
 
         private void InitializeUI()
         {
@@ -103,6 +108,66 @@ namespace SpaceTraders.UI
             _ = FetchAndDisplayTab(tab);
         }
 
+        public void ShowShipyard(string waypointSymbol)
+        {
+            _currentTab = Tab.Shipyard;
+            _dataContainer.Clear();
+            _ = FetchAndDisplayShipyard(waypointSymbol);
+        }
+
+        public void ShowMapForWaypoint(string waypointSymbol)
+        {
+            SwitchTab(Tab.Map);
+            _mapPresenter?.FocusSystemFromWaypoint(waypointSymbol);
+        }
+
+        public async Task RefreshCurrentTab()
+        {
+            if (_currentTab == Tab.Shipyard)
+            {
+                // Shipyard refresh is special as it needs the symbol. 
+                // For now let's just re-fetch standard tabs.
+                return;
+            }
+            await FetchAndDisplayTab(_currentTab);
+        }
+
+        private async Task FetchAndDisplayShipyard(string waypointSymbol)
+        {
+            if (_statusLabel != null) _statusLabel.text = $"Fetching shipyard {waypointSymbol}...";
+            try
+            {
+                var systemSymbol = waypointSymbol.Split('-')[0] + "-" + waypointSymbol.Split('-')[1]; // Basic heuristic
+                var res = await _apiService.GetShipyard(systemSymbol, waypointSymbol);
+                if (_statusLabel != null) _statusLabel.text = string.Empty;
+                DisplayShipyard(res?.Data);
+            }
+            catch (Exception e)
+            {
+                Log.Error("[Dashboard] Failed to load shipyard: {Error}", e.Message);
+                if (_statusLabel != null) _statusLabel.text = $"Error: {e.Message}";
+            }
+        }
+
+        private void DisplayShipyard(Shipyard shipyard)
+        {
+            if (shipyard == null)
+            {
+                _dataContainer.Add(new Label("Failed to load shipyard data."));
+                return;
+            }
+
+            var scroll = (ScrollView)GetContentRoot();
+            if (_shipyardPresenter != null)
+            {
+                _shipyardPresenter.Populate(scroll, shipyard);
+            }
+            else
+            {
+                scroll.Add(new Label("ShipyardPresenter missing."));
+            }
+        }
+
         private void DisplayMapTab()
         {
             if (_mapPresenter != null)
@@ -117,31 +182,50 @@ namespace SpaceTraders.UI
 
         private async Task FetchAndDisplayTab(Tab tab)
         {
+            var requestVersion = ++_tabRequestVersion;
             if (_statusLabel != null) _statusLabel.text = "Fetching data...";
             
             try
             {
                 _client.SetToken(_authManager.AgentToken);
 
-                await FetchAndRenderTabData(tab);
+                await FetchAndRenderTabData(tab, requestVersion);
+
+                if (requestVersion != _tabRequestVersion || tab != _currentTab)
+                {
+                    return;
+                }
 
                 if (_statusLabel != null) _statusLabel.text = string.Empty;
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
+                if (requestVersion != _tabRequestVersion || tab != _currentTab)
+                {
+                    return;
+                }
+
                 Log.Error("[Dashboard] Refresh failed: {Error}", e.Message);
                 if (_statusLabel != null) _statusLabel.text = $"Error: {e.Message}";
             }
         }
 
-        private async Task FetchAndRenderTabData(Tab tab)
+        private async Task FetchAndRenderTabData(Tab tab, int requestVersion)
         {
             var payload = await DashboardTabDataRouter.FetchAsync(tab, _apiService);
+
+            if (requestVersion != _tabRequestVersion || tab != _currentTab)
+            {
+                return;
+            }
+
             RenderTabPayload(tab, payload);
         }
 
         private void RenderTabPayload(Tab tab, DashboardTabPayload payload)
         {
+            _dataContainer.Clear();
+
             switch (tab)
             {
                 case Tab.Agent:

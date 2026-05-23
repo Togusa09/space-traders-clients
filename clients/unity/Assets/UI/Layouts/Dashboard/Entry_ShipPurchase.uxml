@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="dashboard-entry" style="margin-bottom: 10px; padding: 12px; border-width: 1px; border-color: rgb(60, 60, 60); border-radius: 5px; background-color: rgb(40, 40, 40);">
+        <ui:VisualElement style="flex-direction: row; justify-content: space-between;">
+            <ui:VisualElement>
+                <ui:Label name="ship-name" text="Ship Name" class="label-important" style="font-size: 16px; -unity-font-style: bold;" />
+                <ui:Label name="ship-type" text="SHIP_TYPE" style="font-size: 12px; color: rgb(0, 180, 255);" />
+            </ui:VisualElement>
+            <ui:Label name="price-label" text="0 Credits" style="font-size: 16px; color: rgb(0, 255, 100); -unity-font-style: bold;" />
+        </ui:VisualElement>
+        
+        <ui:Label name="description-label" text="Ship description goes here..." style="white-space: normal; font-size: 12px; margin-top: 5px; color: rgb(200, 200, 200);" />
+        
+        <ui:VisualElement style="flex-direction: row; justify-content: flex-end; margin-top: 10px;">
+            <ui:Button name="buy-btn" text="PURCHASE" class="button btn-green" style="width: 120px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
