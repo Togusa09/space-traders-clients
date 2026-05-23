@@ -314,9 +314,31 @@ namespace SpaceTraders.Core
             catch { return 0; }
         }
 
+        /// <summary>
+        /// Closes the active SQLite connection if one exists.
+        /// Primarily intended for deterministic teardown in tests.
+        /// </summary>
+        public void CloseConnection()
+        {
+            if (_db == null) return;
+
+            try
+            {
+                _db.Close();
+            }
+            catch (Exception e)
+            {
+                Log.Warning("[DatabaseManager] CloseConnection failed: {Error}", e.Message);
+            }
+            finally
+            {
+                _db = null;
+            }
+        }
+
         private void OnDestroy()
         {
-            _db?.Close();
+            CloseConnection();
         }
 
         [Table("api_cache")]
