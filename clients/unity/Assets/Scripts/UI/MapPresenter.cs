@@ -393,8 +393,8 @@ namespace SpaceTraders.UI
             string search = _searchField?.value?.Trim().ToUpperInvariant() ?? "";
             string typeF = _typeFilter?.value ?? "ALL";
             string facF = _facilityFilter?.value ?? "ALL";
-            var childMap = wps.GroupBy(w => w.Orbits ?? "").ToDictionary(g => g.Key, g => g.OrderBy(w => w.Symbol).ToList());
-            var roots = childMap.ContainsKey("") ? childMap[""] : wps.Where(w => string.IsNullOrEmpty(w.Orbits)).OrderBy(w => w.Symbol).ToList();
+            var childMap = MapHierarchyProjection.BuildChildMap(wps);
+            var roots = MapHierarchyProjection.BuildRootWaypoints(wps, childMap);
             foreach (var r in roots) { if (WaypointMatches(r, childMap, search, typeF, facF)) { AddWaypointEntry(r, 0); AddWaypointChildren(r, 1, childMap, search, typeF, facF); } }
         }
 
@@ -820,6 +820,39 @@ namespace SpaceTraders.UI
         {
             if (detailedWaypoints == null || string.IsNullOrEmpty(symbol)) return null;
             return detailedWaypoints.FirstOrDefault(x => x.Symbol == symbol);
+        }
+    }
+
+    internal static class MapHierarchyProjection
+    {
+        public static Dictionary<string, List<SystemWaypoint>> BuildChildMap(IEnumerable<SystemWaypoint> waypoints)
+        {
+            if (waypoints == null)
+            {
+                return new Dictionary<string, List<SystemWaypoint>>();
+            }
+
+            return waypoints
+                .GroupBy(waypoint => waypoint.Orbits ?? string.Empty)
+                .ToDictionary(group => group.Key, group => group.OrderBy(waypoint => waypoint.Symbol).ToList());
+        }
+
+        public static List<SystemWaypoint> BuildRootWaypoints(IEnumerable<SystemWaypoint> waypoints, Dictionary<string, List<SystemWaypoint>> childMap)
+        {
+            if (childMap != null && childMap.TryGetValue(string.Empty, out var rootsFromMap))
+            {
+                return rootsFromMap;
+            }
+
+            if (waypoints == null)
+            {
+                return new List<SystemWaypoint>();
+            }
+
+            return waypoints
+                .Where(waypoint => string.IsNullOrEmpty(waypoint.Orbits))
+                .OrderBy(waypoint => waypoint.Symbol)
+                .ToList();
         }
     }
 

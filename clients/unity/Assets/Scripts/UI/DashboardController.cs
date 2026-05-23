@@ -250,17 +250,12 @@ namespace SpaceTraders.UI
         }
 
         // --- Polling for active views ---
-        private float _pollTimer = 0f;
+        private readonly DashboardPollingScheduler _pollingScheduler = new DashboardPollingScheduler(15f);
         private void Update()
         {
-            _pollTimer += Time.deltaTime;
-            if (_pollTimer > 15f)
+            if (_pollingScheduler.ShouldPoll(Time.deltaTime, _currentTab))
             {
-                _pollTimer = 0f;
-                if (DashboardTabBehavior.ShouldPoll(_currentTab))
-                {
-                    _ = FetchAndDisplayTab(_currentTab);
-                }
+                _ = FetchAndDisplayTab(_currentTab);
             }
         }
     }
@@ -275,6 +270,26 @@ namespace SpaceTraders.UI
         public static bool ShouldPoll(DashboardController.Tab tab)
         {
             return tab != DashboardController.Tab.Map && tab != DashboardController.Tab.Agent;
+        }
+    }
+
+    internal sealed class DashboardPollingScheduler
+    {
+        private readonly float _intervalSeconds;
+        private float _elapsedSeconds;
+
+        public DashboardPollingScheduler(float intervalSeconds)
+        {
+            _intervalSeconds = intervalSeconds;
+        }
+
+        public bool ShouldPoll(float deltaTime, DashboardController.Tab currentTab)
+        {
+            _elapsedSeconds += deltaTime;
+            if (_elapsedSeconds <= _intervalSeconds) return false;
+
+            _elapsedSeconds = 0f;
+            return DashboardTabBehavior.ShouldPoll(currentTab);
         }
     }
 

@@ -8,7 +8,7 @@ using Unity.Logging;
 
 namespace SpaceTraders.Core
 {
-    public class DatabaseManager : MonoBehaviour
+    public class DatabaseManager : MonoBehaviour, IApiCacheRepository, ISystemIndexRepository, IJumpGateRepository
     {
         private const string DefaultDatabaseFileName = "spacetraders_v2.db";
         private const string DatabasePathOverrideEnvVar = "SPACETRADERS_DB_PATH";
@@ -374,5 +374,29 @@ namespace SpaceTraders.Core
             /// </summary>
             public string ConnectionsJson { get; set; }
         }
+    }
+
+    internal interface IApiCacheRepository
+    {
+        void SetCache(string key, string json);
+        string GetCache(string key, long maxAgeSeconds);
+        void ClearCache();
+    }
+
+    internal interface ISystemIndexRepository
+    {
+        List<DatabaseManager.IndexedSystem> GetAllSystems();
+        void StoreSystems(IEnumerable<DatabaseManager.IndexedSystem> systems);
+        List<DatabaseManager.IndexedSystem> SearchSystems(string symbolPattern);
+        int GetIndexedSystemCount();
+    }
+
+    internal interface IJumpGateRepository
+    {
+        void StoreJumpGateWaypoints(IEnumerable<(string waypointSymbol, string systemSymbol)> waypoints);
+        void StoreJumpGateConnections(string waypointSymbol, List<string> connections);
+        List<DatabaseManager.IndexedJumpGate> GetPendingJumpGates();
+        List<DatabaseManager.IndexedJumpGate> GetAllJumpGateConnections();
+        int GetIndexedJumpGateCount();
     }
 }
