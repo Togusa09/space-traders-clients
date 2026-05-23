@@ -94,7 +94,7 @@ namespace SpaceTraders.UI
             
             Log.Info("[Dashboard] Switching to tab: {Tab}", tab);
 
-            if (tab == Tab.Map)
+            if (DashboardTabBehavior.IsPresenterManagedTab(tab))
             {
                 DisplayMapTab();
                 return;
@@ -136,23 +136,25 @@ namespace SpaceTraders.UI
 
         private async Task FetchAndRenderTabData(Tab tab)
         {
+            var payload = await DashboardTabDataRouter.FetchAsync(tab, _apiService);
+            RenderTabPayload(tab, payload);
+        }
+
+        private void RenderTabPayload(Tab tab, DashboardTabPayload payload)
+        {
             switch (tab)
             {
                 case Tab.Agent:
-                    var agentRes = await _apiService.GetMyAgent();
-                    DisplayAgent(agentRes.Data);
+                    DisplayAgent(payload.Agent);
                     break;
                 case Tab.Contracts:
-                    var contractRes = await _apiService.GetContracts();
-                    DisplayContracts(contractRes.Data.ToArray());
+                    DisplayContracts(payload.Contracts);
                     break;
                 case Tab.Fleet:
-                    var fleetRes = await _apiService.GetShips();
-                    DisplayFleet(fleetRes.Data.ToArray());
+                    DisplayFleet(payload.Fleet);
                     break;
                 case Tab.Factions:
-                    var factionsRes = await _apiService.GetFactions();
-                    DisplayFactions(factionsRes.Data.ToArray());
+                    DisplayFactions(payload.Factions);
                     break;
             }
         }
@@ -255,11 +257,58 @@ namespace SpaceTraders.UI
             if (_pollTimer > 15f)
             {
                 _pollTimer = 0f;
-                if (_currentTab != Tab.Map && _currentTab != Tab.Agent)
+                if (DashboardTabBehavior.ShouldPoll(_currentTab))
                 {
                     _ = FetchAndDisplayTab(_currentTab);
                 }
             }
+        }
+    }
+
+    internal static class DashboardTabBehavior
+    {
+        public static bool IsPresenterManagedTab(DashboardController.Tab tab)
+        {
+            return tab == DashboardController.Tab.Map;
+        }
+
+        public static bool ShouldPoll(DashboardController.Tab tab)
+        {
+            return tab != DashboardController.Tab.Map && tab != DashboardController.Tab.Agent;
+        }
+    }
+
+    internal sealed class DashboardTabPayload
+    {
+        public Agent Agent { get; set; }
+        public Contract[] Contracts { get; set; }
+        public Ship[] Fleet { get; set; }
+        public Faction[] Factions { get; set; }
+    }
+
+    internal static class DashboardTabDataRouter
+    {
+        public static async Task<DashboardTabPayload> FetchAsync(DashboardController.Tab tab, APIService apiService)
+        {
+            var payload = new DashboardTabPayload();
+
+            switch (tab)
+            {
+                case DashboardController.Tab.Agent:
+                    payload.Agent = (await apiService.GetMyAgent())?.Data;
+                    break;
+                case DashboardController.Tab.Contracts:
+                    payload.Contracts = (await apiService.GetContracts())?.Data?.ToArray();
+                    break;
+                case DashboardController.Tab.Fleet:
+                    payload.Fleet = (await apiService.GetShips())?.Data?.ToArray();
+                    break;
+                case DashboardController.Tab.Factions:
+                    payload.Factions = (await apiService.GetFactions())?.Data?.ToArray();
+                    break;
+            }
+
+            return payload;
         }
     }
 }

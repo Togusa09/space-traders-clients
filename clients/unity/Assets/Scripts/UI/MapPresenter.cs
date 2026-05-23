@@ -436,23 +436,50 @@ namespace SpaceTraders.UI
                 if (!_systemLoadGate.IsCurrent(requestToken)) return;
                 if (res?.Data != null)
                 {
-                    _currentSystem = res.Data; _currentSystem.Waypoints ??= new List<SystemWaypoint>();
-                    _mapMode = MapMode.System; _selectedWaypoint = null;
-                    if (res.Data.Waypoints?.Count > 0) SelectSystemWaypoint(res.Data.Waypoints[0]);
-                    InitializeFilterOptions(); UpdateModeChrome(); PopulateSystemList(); ResetMapCamera(); RefreshMapUI();
+                    ApplyBasicSystemLoad(res.Data);
                     var wpsRes = await _apiService.GetSystemWaypoints(sym);
                     if (!_systemLoadGate.IsCurrent(requestToken)) return;
                     if (wpsRes?.Data != null)
                     {
-                        _detailedWaypoints = wpsRes.Data;
-                        _currentSystem.Waypoints = MapDataProjection.ToSystemWaypoints(wpsRes.Data);
-                        UpdateSystemFacilities(sym, wpsRes.Data);
-                        if (_selectedWaypoint == null && wpsRes.Data.Count > 0) SelectWaypoint(wpsRes.Data[0]);
-                        PopulateSystemList(); RefreshMapUI();
+                        ApplyDetailedSystemLoad(sym, wpsRes.Data);
                     }
                 }
             }
             catch (Exception e) { Log.Error("[Map] System load fail: {Error}", e.Message); }
+        }
+
+        private void ApplyBasicSystemLoad(SpaceTraders.Generated.Model.System system)
+        {
+            _currentSystem = system;
+            _currentSystem.Waypoints ??= new List<SystemWaypoint>();
+            _mapMode = MapMode.System;
+            _selectedWaypoint = null;
+
+            if (_currentSystem.Waypoints.Count > 0)
+            {
+                SelectSystemWaypoint(_currentSystem.Waypoints[0]);
+            }
+
+            InitializeFilterOptions();
+            UpdateModeChrome();
+            PopulateSystemList();
+            ResetMapCamera();
+            RefreshMapUI();
+        }
+
+        private void ApplyDetailedSystemLoad(string systemSymbol, List<Waypoint> detailedWaypoints)
+        {
+            _detailedWaypoints = detailedWaypoints;
+            _currentSystem.Waypoints = MapDataProjection.ToSystemWaypoints(detailedWaypoints);
+            UpdateSystemFacilities(systemSymbol, detailedWaypoints);
+
+            if (_selectedWaypoint == null && detailedWaypoints.Count > 0)
+            {
+                SelectWaypoint(detailedWaypoints[0]);
+            }
+
+            PopulateSystemList();
+            RefreshMapUI();
         }
 
         private void UpdateSystemFacilities(string sym, List<Waypoint> wps)
