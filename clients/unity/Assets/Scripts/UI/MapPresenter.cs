@@ -20,7 +20,7 @@ namespace SpaceTraders.UI
             System
         }
 
-        private enum IconShape
+        internal enum IconShape
         {
             Circle,
             Square,
@@ -29,7 +29,7 @@ namespace SpaceTraders.UI
             Hexagon
         }
 
-        private struct IconStyle
+        internal struct IconStyle
         {
             public IconShape Shape;
             public float Radius;
@@ -627,29 +627,12 @@ namespace SpaceTraders.UI
 
         private IconStyle GetSystemStyle(DatabaseManager.IndexedSystem s)
         {
-            var st = new IconStyle { Radius = 3f, StrokeWidth = 0, FillColor = Color.white, Shape = IconShape.Circle };
-            string t = s.Type.Replace("_", "");
-            if (t == "REDSTAR") st.FillColor = new Color(1f, 0.4f, 0.4f);
-            else if (t == "BLUESTAR") st.FillColor = new Color(0.4f, 0.4f, 1f);
-            else if (t == "YOUNGSTAR") st.FillColor = new Color(0.6f, 1f, 1f);
-            else if (t == "WHITEDWARF") { st.FillColor = Color.white; st.Radius = 2f; }
-            else if (t == "BLACKHOLE") { st.FillColor = Color.black; st.StrokeColor = Color.purple; st.StrokeWidth = 1f; }
-            else if (t == "NEBULA") { st.FillColor = new Color(1f, 0.2f, 1f, 0.4f); st.Shape = IconShape.Square; st.Radius = 5f; }
-            return st;
+            return MapStyleResolver.GetSystemStyle(s);
         }
 
         private IconStyle GetWaypointStyle(SystemWaypoint w)
         {
-            var st = new IconStyle { Radius = 4f, StrokeWidth = 0, FillColor = Color.white, Shape = IconShape.Circle };
-            switch (w.Type)
-            {
-                case WaypointType.PLANET: st.FillColor = new Color(0.2f, 0.6f, 1f); break;
-                case WaypointType.MOON: st.FillColor = Color.gray; st.Radius = 2f; break;
-                case WaypointType.ORBITALSTATION: st.FillColor = Color.yellow; st.Shape = IconShape.Square; st.Radius = 3f; break;
-                case WaypointType.JUMPGATE: st.FillColor = new Color(0.7f, 0f, 1f); st.Shape = IconShape.Diamond; break;
-                case WaypointType.ASTEROIDFIELD: st.FillColor = new Color(0.5f, 0.4f, 0.3f); st.Shape = IconShape.Hexagon; break;
-            }
-            return st;
+            return MapStyleResolver.GetWaypointStyle(w);
         }
 
         private void HandleMapClick(Vector2 lp)
@@ -756,6 +739,67 @@ namespace SpaceTraders.UI
             var center = new Vector2((minX + maxX) / 2f, (minY + maxY) / 2f);
             var offset = (rect.size / 2f) - (center * zoom);
             return (offset, zoom);
+        }
+    }
+
+    internal static class MapStyleResolver
+    {
+        public static MapPresenter.IconStyle GetSystemStyle(DatabaseManager.IndexedSystem system)
+        {
+            var style = new MapPresenter.IconStyle
+            {
+                Radius = 3f,
+                StrokeWidth = 0,
+                FillColor = Color.white,
+                Shape = MapPresenter.IconShape.Circle
+            };
+
+            string type = (system.Type ?? string.Empty).Replace("_", string.Empty);
+            if (type == "REDSTAR") style.FillColor = new Color(1f, 0.4f, 0.4f);
+            else if (type == "BLUESTAR") style.FillColor = new Color(0.4f, 0.4f, 1f);
+            else if (type == "YOUNGSTAR") style.FillColor = new Color(0.6f, 1f, 1f);
+            else if (type == "WHITEDWARF") { style.FillColor = Color.white; style.Radius = 2f; }
+            else if (type == "BLACKHOLE") { style.FillColor = Color.black; style.StrokeColor = Color.purple; style.StrokeWidth = 1f; }
+            else if (type == "NEBULA") { style.FillColor = new Color(1f, 0.2f, 1f, 0.4f); style.Shape = MapPresenter.IconShape.Square; style.Radius = 5f; }
+
+            return style;
+        }
+
+        public static MapPresenter.IconStyle GetWaypointStyle(SystemWaypoint waypoint)
+        {
+            var style = new MapPresenter.IconStyle
+            {
+                Radius = 4f,
+                StrokeWidth = 0,
+                FillColor = Color.white,
+                Shape = MapPresenter.IconShape.Circle
+            };
+
+            switch (waypoint.Type)
+            {
+                case WaypointType.PLANET:
+                    style.FillColor = new Color(0.2f, 0.6f, 1f);
+                    break;
+                case WaypointType.MOON:
+                    style.FillColor = Color.gray;
+                    style.Radius = 2f;
+                    break;
+                case WaypointType.ORBITALSTATION:
+                    style.FillColor = Color.yellow;
+                    style.Shape = MapPresenter.IconShape.Square;
+                    style.Radius = 3f;
+                    break;
+                case WaypointType.JUMPGATE:
+                    style.FillColor = new Color(0.7f, 0f, 1f);
+                    style.Shape = MapPresenter.IconShape.Diamond;
+                    break;
+                case WaypointType.ASTEROIDFIELD:
+                    style.FillColor = new Color(0.5f, 0.4f, 0.3f);
+                    style.Shape = MapPresenter.IconShape.Hexagon;
+                    break;
+            }
+
+            return style;
         }
     }
 }
