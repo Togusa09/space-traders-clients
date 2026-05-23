@@ -78,6 +78,7 @@ namespace SpaceTraders.UI
 
         private DatabaseManager _dbManager;
         private APIService _apiService;
+        private readonly MapRequestVersionGate _systemLoadGate = new MapRequestVersionGate();
 
         private SpaceTraders.Generated.Model.System _currentSystem;
         private string _selectedSymbol;
@@ -270,7 +271,7 @@ namespace SpaceTraders.UI
                 {
                     var res = await _apiService.GetSystems(page, 100);
                     if (res?.Data == null || res.Data.Count == 0) break;
-                    loaded.AddRange(res.Data.Select(s => new DatabaseManager.IndexedSystem { Symbol = s.Symbol, SectorSymbol = s.SectorSymbol, Type = s.Type.ToString(), X = s.X, Y = s.Y, WaypointCount = s.Waypoints?.Count ?? 0 }));
+                    loaded.AddRange(MapDataProjection.ToIndexedSystems(res.Data));
                     if (res.Meta != null && loaded.Count >= res.Meta.Total) break;
                     page++;
                 }
@@ -425,12 +426,14 @@ namespace SpaceTraders.UI
 
         private async void SelectSystem(string sym, VisualElement entry = null)
         {
+            int requestToken = _systemLoadGate.Begin();
             _selectedSymbol = sym; _selectedSystemSymbol = sym; ClearListSelection();
             entry ??= _systemList?.Q<VisualElement>($"list-{sym}"); entry?.AddToClassList("selected-entry");
             UpdateModeChrome();
             try
             {
                 var res = await _apiService.GetSystem(sym);
+                if (!_systemLoadGate.IsCurrent(requestToken)) return;
                 if (res?.Data != null)
                 {
                     _currentSystem = res.Data; _currentSystem.Waypoints ??= new List<SystemWaypoint>();
@@ -438,10 +441,11 @@ namespace SpaceTraders.UI
                     if (res.Data.Waypoints?.Count > 0) SelectSystemWaypoint(res.Data.Waypoints[0]);
                     InitializeFilterOptions(); UpdateModeChrome(); PopulateSystemList(); ResetMapCamera(); RefreshMapUI();
                     var wpsRes = await _apiService.GetSystemWaypoints(sym);
+                    if (!_systemLoadGate.IsCurrent(requestToken)) return;
                     if (wpsRes?.Data != null)
                     {
                         _detailedWaypoints = wpsRes.Data;
-                        _currentSystem.Waypoints = wpsRes.Data.Select(wp => new SystemWaypoint(wp.Symbol, wp.Type, wp.X, wp.Y, wp.Orbitals ?? new List<WaypointOrbital>(), wp.Orbits)).ToList();
+                        _currentSystem.Waypoints = MapDataProjection.ToSystemWaypoints(wpsRes.Data);
                         UpdateSystemFacilities(sym, wpsRes.Data);
                         if (_selectedWaypoint == null && wpsRes.Data.Count > 0) SelectWaypoint(wpsRes.Data[0]);
                         PopulateSystemList(); RefreshMapUI();
@@ -453,9 +457,14 @@ namespace SpaceTraders.UI
 
         private void UpdateSystemFacilities(string sym, List<Waypoint> wps)
         {
-            var facs = new HashSet<string>();
-            foreach (var wp in wps) { if (wp.Traits == null) continue; foreach (var t in wp.Traits) { if (t.Symbol == WaypointTraitSymbol.MARKETPLACE) facs.Add("MARKETPLACE"); if (t.Symbol == WaypointTraitSymbol.SHIPYARD) facs.Add("SHIPYARD"); if (t.Symbol == WaypointTraitSymbol.UNDERCONSTRUCTION) facs.Add("CONSTRUCTION"); } }
-            if (facs.Count > 0) { var sys = _allGalaxySystems?.FirstOrDefault(s => s.Symbol == sym); if (sys != null) { sys.KnownFacilities = string.Join(",", facs); _dbManager?.StoreSystems(new[] { sys }); } }
+            var facilitiesCsv = MapDataProjection.ExtractKnownFacilitiesCsv(wps);
+            if (string.IsNullOrEmpty(facilitiesCsv)) return;
+
+            var sys = _allGalaxySystems?.FirstOrDefault(s => s.Symbol == sym);
+            if (sys == null) return;
+
+            sys.KnownFacilities = facilitiesCsv;
+            _dbManager?.StoreSystems(new[] { sys });
         }
 
         private void SelectSystemWaypoint(SystemWaypoint w)
@@ -772,6 +781,87 @@ namespace SpaceTraders.UI
         {
             if (detailedWaypoints == null || string.IsNullOrEmpty(symbol)) return null;
             return detailedWaypoints.FirstOrDefault(x => x.Symbol == symbol);
+        }
+    }
+
+    internal static class MapDataProjection
+    {
+        public static List<DatabaseManager.IndexedSystem> ToIndexedSystems(IEnumerable<SpaceTraders.Generated.Model.System> systems)
+        {
+            if (systems == null) return new List<DatabaseManager.IndexedSystem>();
+
+            return systems
+                .Select(system => new DatabaseManager.IndexedSystem
+                {
+                    Symbol = system.Symbol,
+                    SectorSymbol = system.SectorSymbol,
+                    Type = system.Type.ToString(),
+                    X = system.X,
+                    Y = system.Y,
+                    WaypointCount = system.Waypoints?.Count ?? 0
+                })
+                .ToList();
+        }
+
+        public static List<SystemWaypoint> ToSystemWaypoints(IEnumerable<Waypoint> detailedWaypoints)
+        {
+            if (detailedWaypoints == null) return new List<SystemWaypoint>();
+
+            return detailedWaypoints
+                .Select(waypoint => new SystemWaypoint(
+                    symbol: waypoint.Symbol,
+                    type: waypoint.Type,
+                    x: waypoint.X,
+                    y: waypoint.Y,
+                    orbitals: waypoint.Orbitals ?? new List<WaypointOrbital>(),
+                    orbits: waypoint.Orbits))
+                .ToList();
+        }
+
+        public static string ExtractKnownFacilitiesCsv(IEnumerable<Waypoint> waypoints)
+        {
+            if (waypoints == null) return string.Empty;
+
+            bool hasMarketplace = false;
+            bool hasShipyard = false;
+            bool hasConstruction = false;
+
+            foreach (var waypoint in waypoints)
+            {
+                if (waypoint?.Traits == null) continue;
+
+                foreach (var trait in waypoint.Traits)
+                {
+                    if (trait == null) continue;
+
+                    if (trait.Symbol == WaypointTraitSymbol.MARKETPLACE) hasMarketplace = true;
+                    else if (trait.Symbol == WaypointTraitSymbol.SHIPYARD) hasShipyard = true;
+                    else if (trait.Symbol == WaypointTraitSymbol.UNDERCONSTRUCTION) hasConstruction = true;
+                }
+            }
+
+            var facilities = new List<string>();
+            if (hasMarketplace) facilities.Add("MARKETPLACE");
+            if (hasShipyard) facilities.Add("SHIPYARD");
+            if (hasConstruction) facilities.Add("CONSTRUCTION");
+
+            return string.Join(",", facilities);
+        }
+    }
+
+    internal sealed class MapRequestVersionGate
+    {
+        private int _currentVersion;
+
+        public int Begin()
+        {
+            _currentVersion++;
+            return _currentVersion;
+        }
+
+        public bool IsCurrent(int requestVersion)
+        {
+            return requestVersion == _currentVersion;
         }
     }
 
