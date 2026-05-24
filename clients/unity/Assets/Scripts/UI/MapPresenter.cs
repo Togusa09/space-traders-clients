@@ -7,12 +7,13 @@ using UnityEngine.UIElements;
 using SpaceTraders.API;
 using SpaceTraders.Generated.Model;
 using SpaceTraders.Core;
+using SpaceTraders.UI.Map;
 using VContainer;
 using Unity.Logging;
 
 namespace SpaceTraders.UI
 {
-    public class MapPresenter : MonoBehaviour
+    public class MapPresenter : MonoBehaviour, IMapInteractionHost
     {
         private enum MapMode
         {
@@ -171,7 +172,7 @@ namespace SpaceTraders.UI
             _mapInitialized = false;
             _mapContainer.RegisterCallback<GeometryChangedEvent>(OnMapGeometryChanged);
             _mapContainer.generateVisualContent += OnGenerateVisualContent;
-            _mapContainer.AddManipulator(new MapManipulator(this));
+            _mapContainer.AddManipulator(new MapInteractionManipulator(this));
 
             // Load Data
             if (_systemIndexRepository != null)
@@ -1210,16 +1211,18 @@ namespace SpaceTraders.UI
             return _pendingExternalSystemSymbol;
         }
 
-        private class MapManipulator : Manipulator
+        float IMapInteractionHost.MinZoom => _minZoom;
+
+        float IMapInteractionHost.MaxZoom => _maxZoom;
+
+        void IMapInteractionHost.HandleMapClickFromInteraction(Vector2 localPosition)
         {
-            private readonly MapPresenter _p; private bool _a; private Vector2 _lm;
-            public MapManipulator(MapPresenter p) { _p = p; }
-            protected override void RegisterCallbacksOnTarget() { target.RegisterCallback<PointerDownEvent>(OnPointerDown); target.RegisterCallback<PointerMoveEvent>(OnPointerMove); target.RegisterCallback<PointerUpEvent>(OnPointerUp); target.RegisterCallback<WheelEvent>(OnWheel); }
-            protected override void UnregisterCallbacksFromTarget() { target.UnregisterCallback<PointerDownEvent>(OnPointerDown); target.UnregisterCallback<PointerMoveEvent>(OnPointerMove); target.UnregisterCallback<PointerUpEvent>(OnPointerUp); target.UnregisterCallback<WheelEvent>(OnWheel); }
-            private void OnPointerDown(PointerDownEvent e) { if (e.button == 0) { _p.HandleMapClick(e.localPosition); e.StopPropagation(); return; } if (e.button == 1 || e.button == 2) { _a = true; _lm = e.localPosition; target.CapturePointer(e.pointerId); e.StopPropagation(); } }
-            private void OnPointerMove(PointerMoveEvent e) { if (_a) { _p.MapOffset += (Vector2)e.localPosition - _lm; _p.RefreshMapUI(); _lm = e.localPosition; e.StopPropagation(); } }
-            private void OnPointerUp(PointerUpEvent e) { if (_a && (e.button == 1 || e.button == 2)) { _a = false; target.ReleasePointer(e.pointerId); e.StopPropagation(); } }
-            private void OnWheel(WheelEvent e) { float d = -e.delta.y * 0.1f; float oz = _p.MapZoom; _p.MapZoom = Mathf.Clamp(_p.MapZoom * (1f + d), _p._minZoom, _p._maxZoom); _p.MapOffset = e.localMousePosition - ((e.localMousePosition - _p.MapOffset) / oz * _p.MapZoom); _p.RefreshMapUI(); e.StopPropagation(); }
+            HandleMapClick(localPosition);
+        }
+
+        void IMapInteractionHost.RefreshMapFromInteraction()
+        {
+            RefreshMapUI();
         }
     }
 }
