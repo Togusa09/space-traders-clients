@@ -57,13 +57,12 @@ namespace SpaceTraders.UI.Map
 
                 foreach (var connectionWaypoint in gate.ConnectionsJson.Split(','))
                 {
-                    var parts = connectionWaypoint.Split('-');
-                    if (parts.Length == 0 || string.IsNullOrEmpty(parts[0]))
+                    var otherSystem = ExtractSystemSymbol(connectionWaypoint);
+                    if (string.IsNullOrEmpty(otherSystem))
                     {
                         continue;
                     }
 
-                    var otherSystem = parts[0];
                     if (otherSystem == gate.SystemSymbol)
                     {
                         continue;
@@ -81,6 +80,22 @@ namespace SpaceTraders.UI.Map
             }
 
             return links;
+        }
+
+        private static string ExtractSystemSymbol(string waypointSymbol)
+        {
+            if (string.IsNullOrWhiteSpace(waypointSymbol))
+            {
+                return null;
+            }
+
+            var parts = waypointSymbol.Split('-');
+            if (parts.Length >= 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+            {
+                return $"{parts[0]}-{parts[1]}";
+            }
+
+            return parts.Length > 0 ? parts[0] : null;
         }
     }
 }
