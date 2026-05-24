@@ -4,6 +4,7 @@ using NUnit.Framework;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
 using SpaceTraders.UI;
+using SpaceTraders.UI.Map;
 
 namespace SpaceTraders.Tests.EditMode.Editor
 {
@@ -12,7 +13,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void MatchesGalaxySystem_NormalizesTypeFilterToken()
         {
-            var system = new DatabaseManager.IndexedSystem
+            var system = new IndexedSystem
             {
                 Symbol = "X1-TEST",
                 Type = "NEUTRON_STAR",
@@ -26,7 +27,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void MatchesGalaxySystem_RespectsFacilityFilter()
         {
-            var system = new DatabaseManager.IndexedSystem
+            var system = new IndexedSystem
             {
                 Symbol = "X1-TEST",
                 Type = "NEUTRON_STAR",

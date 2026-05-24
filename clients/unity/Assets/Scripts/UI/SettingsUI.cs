@@ -96,21 +96,34 @@ namespace SpaceTraders.UI
             if (_syncStatusLabel == null || _syncManager == null || _systemIndexRepository == null) return;
 
             var sync = _syncManager;
+            int systemsCount = _systemIndexRepository.GetIndexedSystemCount();
+            
+            // Format a concise status line
+            string status = sync.CurrentPhase switch
+            {
+                SyncPhase.Systems => $"Indexing Systems... {sync.Progress:P0} (Page {sync.CurrentPage}/{sync.TotalPages})",
+                SyncPhase.JumpGates => $"Syncing Jump Gates... {sync.Progress:P0} ({sync.TotalJumpGates - sync.PendingJumpGates}/{sync.TotalJumpGates})",
+                SyncPhase.Complete => "Universe Fully Synced",
+                _ => sync.IsSyncing ? "Syncing..." : "Sync Idle"
+            };
+
+            _syncStatusLabel.text = status;
 
             if (sync.IsSyncing)
             {
-                _syncStatusLabel.text = $"Syncing: {sync.Progress:P0} (Page {sync.CurrentPage}/{sync.TotalPages})";
                 if (_startSyncButton != null) _startSyncButton.SetEnabled(false);
                 if (_stopSyncButton != null) _stopSyncButton.SetEnabled(true);
             }
             else
             {
-                _syncStatusLabel.text = "Sync Idle";
                 if (_startSyncButton != null) _startSyncButton.SetEnabled(true);
                 if (_stopSyncButton != null) _stopSyncButton.SetEnabled(false);
             }
 
-            if (_dbStatusLabel != null) _dbStatusLabel.text = _systemIndexRepository.GetIndexedSystemCount().ToString();
+            if (_dbStatusLabel != null)
+            {
+                _dbStatusLabel.text = $"Systems: {systemsCount} | Jump Gates: {sync.TotalJumpGates}";
+            }
         }
 
         private void OnStartSyncClicked() => _syncManager?.StartSync();
@@ -118,6 +131,7 @@ namespace SpaceTraders.UI
         private void OnClearCacheClicked()
         {
             _apiCacheRepository?.ClearCache();
+            _syncManager?.RefreshCounts();
             UpdateStatus();
         }
 

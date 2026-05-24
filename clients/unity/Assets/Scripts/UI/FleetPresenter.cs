@@ -3,6 +3,8 @@ using UnityEngine.UIElements;
 using SpaceTraders.API;
 using SpaceTraders.Generated.Model;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using VContainer;
 using Unity.Logging;
 
@@ -13,6 +15,8 @@ namespace SpaceTraders.UI
         public VisualTreeAsset shipEntryTemplate;
 
         private APIService _apiService;
+        private DashboardController _dashboardController;
+        private readonly Dictionary<string, List<string>> _systemWaypointChoicesCache = new Dictionary<string, List<string>>();
 
         [Inject]
         public void Construct(APIService apiService)
@@ -24,6 +28,7 @@ namespace SpaceTraders.UI
         {
             if (list == null) return;
             list.Clear();
+            _dashboardController ??= GetComponent<DashboardController>();
 
             foreach (var s in ships)
             {
@@ -45,6 +50,7 @@ namespace SpaceTraders.UI
                 var orbitBtn = entry.Q<Button>("action-orbit-dock-btn");
                 var extractBtn = entry.Q<Button>("action-extract-btn");
                 var refuelBtn = entry.Q<Button>("action-refuel-btn");
+                var showOnMapBtn = entry.Q<Button>("show-on-map-btn");
 
                 if (orbitBtn != null)
                 {
@@ -64,6 +70,26 @@ namespace SpaceTraders.UI
                         catch (System.Exception e) { Log.Error("[FleetPresenter] Toggle status failed: {Error}", e.Message); }
                         finally { if (orbitBtn != null) orbitBtn.SetEnabled(true); }
                     };
+                }
+
+                if (showOnMapBtn != null)
+                {
+                    showOnMapBtn.clicked += () =>
+                    {
+                        if (_dashboardController == null)
+                        {
+                            Log.Warning("[FleetPresenter] DashboardController not found. Cannot open map for {ShipSymbol}.", s.Symbol);
+                            return;
+                        }
+
+                        _dashboardController.ShowMapForWaypoint(s.Nav?.WaypointSymbol);
+                    };
+                }
+
+                var navDropdownPlaceholder = entry.Q<VisualElement>("nav-dropdown-placeholder");
+                if (navDropdownPlaceholder != null)
+                {
+                    SetupNavDropdown(navDropdownPlaceholder, s);
                 }
 
                 if (extractBtn != null)
@@ -119,6 +145,123 @@ namespace SpaceTraders.UI
                 }
 
                 list.Add(entry);
+            }
+        }
+
+        private void SetupNavDropdown(VisualElement placeholder, Ship ship)
+        {
+            placeholder.Clear();
+
+            var dropdown = new DropdownField
+            {
+                choices = new List<string> { "Loading..." },
+                value = "Loading..."
+            };
+            dropdown.style.flexGrow = 1;
+            dropdown.SetEnabled(false);
+            placeholder.Add(dropdown);
+
+            _ = PopulateNavDropdownAsync(dropdown, ship);
+        }
+
+        private async Task PopulateNavDropdownAsync(DropdownField dropdown, Ship ship)
+        {
+            var currentWaypoint = ship?.Nav?.WaypointSymbol;
+            var systemSymbol = MapPresenter.GetSystemSymbolFromWaypoint(currentWaypoint);
+
+            if (string.IsNullOrWhiteSpace(systemSymbol))
+            {
+                dropdown.choices = new List<string> { "N/A" };
+                dropdown.SetValueWithoutNotify("N/A");
+                dropdown.SetEnabled(false);
+                return;
+            }
+
+            List<string> waypointChoices;
+            if (!_systemWaypointChoicesCache.TryGetValue(systemSymbol, out waypointChoices))
+            {
+                try
+                {
+                    var response = await _apiService.GetSystemWaypoints(systemSymbol);
+                    waypointChoices = response?.Data?
+                        .Select(w => w.Symbol)
+                        .Where(sym => !string.IsNullOrWhiteSpace(sym))
+                        .Distinct()
+                        .OrderBy(sym => sym)
+                        .ToList() ?? new List<string>();
+
+                    if (waypointChoices.Count == 0 && !string.IsNullOrWhiteSpace(currentWaypoint))
+                    {
+                        waypointChoices.Add(currentWaypoint);
+                    }
+
+                    _systemWaypointChoicesCache[systemSymbol] = waypointChoices;
+                }
+                catch (System.Exception e)
+                {
+                    Log.Error("[FleetPresenter] Failed to load Nav To options for {System}: {Error}", systemSymbol, e.Message);
+                    dropdown.choices = new List<string> { "Unavailable" };
+                    dropdown.SetValueWithoutNotify("Unavailable");
+                    dropdown.SetEnabled(false);
+                    return;
+                }
+            }
+
+            if (waypointChoices == null || waypointChoices.Count == 0)
+            {
+                dropdown.choices = new List<string> { "Unavailable" };
+                dropdown.SetValueWithoutNotify("Unavailable");
+                dropdown.SetEnabled(false);
+                return;
+            }
+
+            dropdown.choices = waypointChoices;
+            var selected = waypointChoices.Contains(currentWaypoint) ? currentWaypoint : waypointChoices[0];
+            dropdown.SetValueWithoutNotify(selected);
+            var selectedWaypoint = selected;
+
+            var canNavigate = ship?.Nav?.Status == ShipNavStatus.INORBIT;
+            dropdown.SetEnabled(canNavigate && waypointChoices.Count > 1);
+
+            dropdown.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue == evt.previousValue)
+                {
+                    return;
+                }
+
+                _ = NavigateShipToWaypointAsync(dropdown, ship, evt.newValue, selectedWaypoint, () => selectedWaypoint = evt.newValue);
+            });
+        }
+
+        private async Task NavigateShipToWaypointAsync(DropdownField dropdown, Ship ship, string waypointSymbol, string fallbackWaypoint, System.Action onSuccess)
+        {
+            if (ship?.Nav?.Status != ShipNavStatus.INORBIT)
+            {
+                dropdown.SetValueWithoutNotify(fallbackWaypoint);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(waypointSymbol) || waypointSymbol == fallbackWaypoint)
+            {
+                return;
+            }
+
+            try
+            {
+                dropdown.SetEnabled(false);
+                await _apiService.NavigateShip(ship.Symbol, waypointSymbol);
+                onSuccess?.Invoke();
+                Log.Info("[FleetPresenter] Ship {ShipSymbol} navigating to {Waypoint}", ship.Symbol, waypointSymbol);
+            }
+            catch (System.Exception e)
+            {
+                Log.Error("[FleetPresenter] Navigate failed for {ShipSymbol} to {Waypoint}: {Error}", ship.Symbol, waypointSymbol, e.Message);
+                dropdown.SetValueWithoutNotify(fallbackWaypoint);
+            }
+            finally
+            {
+                dropdown.SetEnabled(true);
             }
         }
     }

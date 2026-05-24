@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using SpaceTraders.Generated.Model;
 using SpaceTraders.UI;
+using SpaceTraders.UI.Map;
 
 namespace SpaceTraders.Tests.EditMode.Editor
 {

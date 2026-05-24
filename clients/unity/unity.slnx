@@ -1,5 +1,6 @@
 ﻿<Solution>
+  <Project Path="SpaceTraders.Main.csproj" />
   <Project Path="SpaceTraders.Generated.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
-  <Project Path="SpaceTraders.Main.csproj" />
+  <Project Path="SpaceTraders.PlayModeTests.csproj" />
 </Solution>

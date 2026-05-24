@@ -28,9 +28,9 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 },
                 meta: new Meta(total: 95, page: 1, limit: 20));
 
-            var existing = new Dictionary<string, DatabaseManager.IndexedSystem>
+            var existing = new Dictionary<string, IndexedSystem>
             {
-                ["X1-TEST"] = new DatabaseManager.IndexedSystem
+                ["X1-TEST"] = new IndexedSystem
                 {
                     Symbol = "X1-TEST",
                     KnownFacilities = "MARKETPLACE,SHIPYARD"

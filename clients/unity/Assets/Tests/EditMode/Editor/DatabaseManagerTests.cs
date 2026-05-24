@@ -124,7 +124,7 @@ namespace SpaceTraders.Tests
         {
             _dbManager.SetCache("key1", "data1");
             
-            var testSystem = new DatabaseManager.IndexedSystem
+            var testSystem = new IndexedSystem
             {
                 Symbol = "X1-Y2",
                 SectorSymbol = "X1",
@@ -133,7 +133,7 @@ namespace SpaceTraders.Tests
                 Y = -20,
                 WaypointCount = 5
             };
-            _dbManager.StoreSystems(new List<DatabaseManager.IndexedSystem> { testSystem });
+            _dbManager.StoreSystems(new List<IndexedSystem> { testSystem });
 
             Assert.AreEqual(1, _dbManager.GetIndexedSystemCount());
             Assert.AreEqual("data1", _dbManager.GetCache("key1", 100));
@@ -148,11 +148,11 @@ namespace SpaceTraders.Tests
         [Test]
         public void StoreAndQuerySystems_BulkTransaction_Success()
         {
-            var systems = new List<DatabaseManager.IndexedSystem>
+            var systems = new List<IndexedSystem>
             {
-                new DatabaseManager.IndexedSystem { Symbol = "SOL-A", SectorSymbol = "SOL", Type = "YELLOW_STAR", X = 0, Y = 0, WaypointCount = 9 },
-                new DatabaseManager.IndexedSystem { Symbol = "SOL-B", SectorSymbol = "SOL", Type = "RED_STAR", X = 10, Y = 5, WaypointCount = 3 },
-                new DatabaseManager.IndexedSystem { Symbol = "VEGA-I", SectorSymbol = "VEGA", Type = "BLUE_STAR", X = -50, Y = 100, WaypointCount = 12 }
+                new IndexedSystem { Symbol = "SOL-A", SectorSymbol = "SOL", Type = "YELLOW_STAR", X = 0, Y = 0, WaypointCount = 9 },
+                new IndexedSystem { Symbol = "SOL-B", SectorSymbol = "SOL", Type = "RED_STAR", X = 10, Y = 5, WaypointCount = 3 },
+                new IndexedSystem { Symbol = "VEGA-I", SectorSymbol = "VEGA", Type = "BLUE_STAR", X = -50, Y = 100, WaypointCount = 12 }
             };
 
             _dbManager.StoreSystems(systems);

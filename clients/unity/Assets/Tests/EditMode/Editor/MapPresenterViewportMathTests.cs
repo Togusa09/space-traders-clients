@@ -14,8 +14,8 @@ namespace SpaceTraders.Tests.EditMode.Editor
             const float zoom = 2.5f;
             var offset = new Vector2(100f, 50f);
 
-            var screen = SpaceTraders.UI.MapViewportMath.WorldToScreen(world, zoom, offset);
-            var roundTrip = SpaceTraders.UI.MapViewportMath.ScreenToWorld(screen, zoom, offset);
+            var screen = SpaceTraders.UI.Map.MapViewportMath.WorldToScreen(world, zoom, offset);
+            var roundTrip = SpaceTraders.UI.Map.MapViewportMath.ScreenToWorld(screen, zoom, offset);
 
             Assert.That(roundTrip.x, Is.EqualTo(world.x).Within(0.0001f));
             Assert.That(roundTrip.y, Is.EqualTo(world.y).Within(0.0001f));
@@ -25,7 +25,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         public void FitBounds_WithNoPoints_ReturnsCenteredDefaultZoom()
         {
             var rect = new Rect(0f, 0f, 400f, 300f);
-            var result = SpaceTraders.UI.MapViewportMath.FitBounds(new List<Vector2>(), rect, 0.1f, 10f);
+            var result = SpaceTraders.UI.Map.MapViewportMath.FitBounds(new List<Vector2>(), rect, 0.1f, 10f);
             var offset = result.Offset;
             var zoom = result.Zoom;
 

@@ -3,6 +3,7 @@ using UnityEngine.UIElements;
 using UnityEngine.SceneManagement;
 using SpaceTraders.Core;
 using VContainer;
+using VContainer.Unity;
 using Unity.Logging;
 
 namespace SpaceTraders.UI
@@ -14,18 +15,25 @@ namespace SpaceTraders.UI
         private Button _quitButton;
 
         private AuthManager _authManager;
+        private bool _wasInjected;
 
         [Inject]
         public void Construct(AuthManager authManager)
         {
             _authManager = authManager;
+            _wasInjected = true;
             Log.Info("[MenuManager] AuthManager injected successfully.");
         }
 
         private void Start()
         {
             InitializeUI();
-            
+
+            if (_authManager == null)
+            {
+                DiagnoseAndResolveAuthManager();
+            }
+
             if (_authManager != null)
             {
                 _authManager.LoadTokens();
@@ -34,6 +42,34 @@ namespace SpaceTraders.UI
             else
             {
                 Log.Warning("[MenuManager] AuthManager is null in Start(). Injection might have failed.");
+            }
+        }
+
+        private void DiagnoseAndResolveAuthManager()
+        {
+            if (!_wasInjected)
+            {
+                Log.Warning("[MenuManager] Construct(...) was not called before Start. Auto-injection likely skipped for this GameObject.");
+            }
+
+            var scope = LifetimeScope.Find<GameLifetimeScope>();
+            if (scope == null)
+            {
+                Log.Error("[MenuManager] Could not find GameLifetimeScope. Verify VContainer project root is active in this play session.");
+                return;
+            }
+
+            try
+            {
+                _authManager = scope?.Container.Resolve<AuthManager>();
+                if (_authManager != null)
+                {
+                    Log.Warning("[MenuManager] Container can resolve AuthManager, but MenuManager was not auto-injected. Check MainMenuLifetimeScope.autoInjectGameObjects includes this GameObject.");
+                }
+            }
+            catch (VContainerException)
+            {
+                Log.Error("[MenuManager] GameLifetimeScope exists but AuthManager is not resolvable from container registration.");
             }
         }
 

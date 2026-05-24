@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Api;
@@ -15,6 +16,7 @@ namespace SpaceTraders.API
         private AuthManager _authManager;
         private Configuration _configuration;
         private ApiClient _apiClient;
+        private RateLimiter _rateLimiter;
 
         // Generated APIs
         public AgentsApi Agents { get; private set; }
@@ -28,6 +30,7 @@ namespace SpaceTraders.API
         public void Construct(AuthManager authManager)
         {
             _authManager = authManager;
+            _rateLimiter = new RateLimiter(2, 10); // 2 rps, 10 burst
             InitializeClient();
         }
 
@@ -71,18 +74,36 @@ namespace SpaceTraders.API
         /// <summary>
         /// Wrapper to handle common API response logic, retries, and errors.
         /// </summary>
-        public async Task<T> ExecuteAsync<T>(Task<ApiResponse<T>> task, string endpointInfo = "")
+        public async Task<T> ExecuteAsync<T>(Func<Task<ApiResponse<T>>> apiCall, string endpointInfo = "")
         {
-            // TODO: Implement retry logic and rate limit handling here if needed.
-            // For now, simple execution with error mapping.
             try
             {
-                var response = await task;
+                await _rateLimiter.WaitAsync();
+                var response = await apiCall();
                 Log.Info("[SpaceTradersClient] {Info} Success ({Code})", endpointInfo, response.StatusCode);
                 return response.Data;
             }
             catch (ApiException e)
             {
+                if (e.ErrorCode == 429)
+                {
+                    Log.Warning("[SpaceTradersClient] Rate limit hit (429). Headers: {Headers}", e.Headers);
+                    // Extract x-ratelimit-reset if possible
+                    if (e.Headers != null && e.Headers.TryGetValue("x-ratelimit-reset", out var resetHeader))
+                    {
+                        var firstValue = resetHeader.FirstOrDefault();
+                        if (!string.IsNullOrEmpty(firstValue) && DateTime.TryParse(firstValue, out var resetTime))
+                        {
+                            _rateLimiter.SetResetTime(resetTime);
+                        }
+                    }
+                    
+                    // Simple retry once after 429
+                    await _rateLimiter.WaitAsync();
+                    var retryResponse = await apiCall();
+                    return retryResponse.Data;
+                }
+
                 Log.Error("[SpaceTradersClient] {Info} Failed ({Code}): {Error}", endpointInfo, e.ErrorCode, e.Message);
                 if (e.ErrorCode == 401)
                 {
@@ -98,3 +119,4 @@ namespace SpaceTraders.API
         }
     }
 }
+
