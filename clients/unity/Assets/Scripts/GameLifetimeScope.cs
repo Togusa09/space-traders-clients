@@ -45,6 +45,7 @@ namespace SpaceTraders
             builder.RegisterComponent(authManager);
             builder.RegisterComponent(spaceTradersClient);
             builder.RegisterComponent(apiService);
+            builder.Register<IUniverseApiService>(resolver => resolver.Resolve<APIService>(), Lifetime.Singleton);
             builder.RegisterComponent(universeSyncManager);
             builder.RegisterComponent(gameManager);
         }

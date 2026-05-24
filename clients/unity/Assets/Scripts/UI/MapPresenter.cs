@@ -147,6 +147,13 @@ namespace SpaceTraders.UI
             _typeFilter = panel.Q<DropdownField>("type-filter");
             _facilityFilter = panel.Q<DropdownField>("facility-filter");
 
+            if (_mapContainer == null || _systemList == null)
+            {
+                container.Clear();
+                container.Add(new Label("Error: System Panel Template missing required elements."));
+                return;
+            }
+
             _labelContainer = new VisualElement { style = { position = Position.Absolute, width = Length.Percent(100), height = Length.Percent(100) }, pickingMode = PickingMode.Ignore };
             _mapContainer?.Add(_labelContainer);
 
@@ -1197,6 +1204,11 @@ namespace SpaceTraders.UI
         internal string GetSelectedSystemSymbolForTest()
         {
             return _selectedSystemSymbol;
+        }
+
+        internal string GetPendingExternalSystemSymbolForTest()
+        {
+            return _pendingExternalSystemSymbol;
         }
 
         private class MapManipulator : Manipulator

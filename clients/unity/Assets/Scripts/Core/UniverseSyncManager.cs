@@ -35,15 +35,15 @@ namespace SpaceTraders.Core
 
         private CancellationTokenSource _cts;
 
-        private APIService _apiService;
+        private IUniverseApiService _universeApiService;
         private AuthManager _authManager;
         private ISystemIndexRepository _systemIndexRepository;
         private IJumpGateRepository _jumpGateRepository;
 
         [Inject]
-        internal void Construct(APIService apiService, AuthManager authManager, ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository)
+        internal void Construct(IUniverseApiService universeApiService, AuthManager authManager, ISystemIndexRepository systemIndexRepository, IJumpGateRepository jumpGateRepository)
         {
-            _apiService = apiService;
+            _universeApiService = universeApiService;
             _authManager = authManager;
             _systemIndexRepository = systemIndexRepository;
             _jumpGateRepository = jumpGateRepository;
@@ -110,7 +110,7 @@ namespace SpaceTraders.Core
                     if (token.IsCancellationRequested) break;
 
                     Log.Info("[UniverseSyncManager] Requesting page {Page}...", CurrentPage);
-                    var response = await _apiService.GetSystems(CurrentPage, limit);
+                    var response = await _universeApiService.GetSystems(CurrentPage, limit);
 
                     if (response != null && response.Data != null)
                     {
@@ -197,7 +197,7 @@ namespace SpaceTraders.Core
 
                 try
                 {
-                    var response = await _apiService.GetJumpGate(gate.SystemSymbol, gate.WaypointSymbol);
+                    var response = await _universeApiService.GetJumpGate(gate.SystemSymbol, gate.WaypointSymbol);
                     var connections = response?.Data?.Connections ?? new List<string>();
                     _jumpGateRepository.StoreJumpGateConnections(gate.WaypointSymbol, connections);
                     fetched++;

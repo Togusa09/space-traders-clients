@@ -12,7 +12,7 @@ using Unity.Logging;
 
 namespace SpaceTraders.API
 {
-    public class APIService : MonoBehaviour
+    public class APIService : MonoBehaviour, IUniverseApiService
     {
         private const long PersistentCacheMaxAge = 24 * 60 * 60; // 24 hours
 
