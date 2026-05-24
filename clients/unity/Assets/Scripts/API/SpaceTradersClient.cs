@@ -235,11 +235,11 @@ namespace SpaceTraders.API
                 Code = null
             };
 
-            public string RawJson { get; init; }
-            public string Message { get; init; }
-            public string RequestId { get; init; }
-            public string DataJson { get; init; }
-            public int? Code { get; init; }
+            public string RawJson { get; set; }
+            public string Message { get; set; }
+            public string RequestId { get; set; }
+            public string DataJson { get; set; }
+            public int? Code { get; set; }
         }
     }
 }
