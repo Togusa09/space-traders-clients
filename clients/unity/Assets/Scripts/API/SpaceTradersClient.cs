@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Api;
 using SpaceTraders.Generated.Client;
@@ -85,9 +87,17 @@ namespace SpaceTraders.API
             }
             catch (ApiException e)
             {
+                var parsedError = ParseServerError(e);
+                EnrichExceptionData(e, parsedError);
+
                 if (e.ErrorCode == 429)
                 {
-                    Log.Warning("[SpaceTradersClient] Rate limit hit (429). Headers: {Headers}", e.Headers);
+                    Log.Warning("[SpaceTradersClient] Rate limit hit (429). Headers: {Headers}. Message: {ServerMessage}. RequestId: {RequestId}. Data: {ServerData}. Raw: {RawError}",
+                        e.Headers,
+                        parsedError.Message,
+                        parsedError.RequestId,
+                        parsedError.DataJson,
+                        parsedError.RawJson);
                     // Extract x-ratelimit-reset if possible
                     if (e.Headers != null && e.Headers.TryGetValue("x-ratelimit-reset", out var resetHeader))
                     {
@@ -104,7 +114,14 @@ namespace SpaceTraders.API
                     return retryResponse.Data;
                 }
 
-                Log.Error("[SpaceTradersClient] {Info} Failed ({Code}): {Error}", endpointInfo, e.ErrorCode, e.Message);
+                Log.Error("[SpaceTradersClient] {Info} Failed ({Code}): {Error}. ServerMessage: {ServerMessage}. RequestId: {RequestId}. Data: {ServerData}. Raw: {RawError}",
+                    endpointInfo,
+                    e.ErrorCode,
+                    e.Message,
+                    parsedError.Message,
+                    parsedError.RequestId,
+                    parsedError.DataJson,
+                    parsedError.RawJson);
                 if (e.ErrorCode == 401)
                 {
                     _authManager.HandleTokenUnauthorized();
@@ -116,6 +133,113 @@ namespace SpaceTraders.API
                 Log.Error("[SpaceTradersClient] {Info} Unexpected error: {Error}", endpointInfo, e.Message);
                 throw;
             }
+        }
+
+        private static void EnrichExceptionData(ApiException e, ParsedServerError parsed)
+        {
+            e.Data["SpaceTraders.RawErrorJson"] = parsed.RawJson;
+            e.Data["SpaceTraders.ServerMessage"] = parsed.Message;
+            e.Data["SpaceTraders.RequestId"] = parsed.RequestId;
+            e.Data["SpaceTraders.ServerDataJson"] = parsed.DataJson;
+
+            if (parsed.Code.HasValue)
+            {
+                e.Data["SpaceTraders.ServerErrorCode"] = parsed.Code.Value;
+            }
+        }
+
+        private static ParsedServerError ParseServerError(ApiException e)
+        {
+            var raw = e.ErrorContent?.ToString();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return ParsedServerError.Empty;
+            }
+
+            if (TryParseErrorJson(raw, out var parsed))
+            {
+                return parsed;
+            }
+
+            // Some logs/handlers can provide escaped JSON as a JSON string literal.
+            try
+            {
+                var unescaped = JsonConvert.DeserializeObject<string>(raw);
+                if (!string.IsNullOrWhiteSpace(unescaped) && TryParseErrorJson(unescaped, out parsed))
+                {
+                    return parsed;
+                }
+            }
+            catch
+            {
+                // Keep raw payload even if parsing fails.
+            }
+
+            return new ParsedServerError
+            {
+                RawJson = raw,
+                Message = string.Empty,
+                RequestId = string.Empty,
+                DataJson = string.Empty,
+                Code = null
+            };
+        }
+
+        private static bool TryParseErrorJson(string json, out ParsedServerError parsed)
+        {
+            parsed = ParsedServerError.Empty;
+
+            try
+            {
+                var root = JToken.Parse(json);
+                var errorNode = root["error"] ?? root;
+
+                int? code = null;
+                var codeToken = errorNode["code"];
+                if (codeToken != null && int.TryParse(codeToken.ToString(), out var parsedCode))
+                {
+                    code = parsedCode;
+                }
+
+                var message = errorNode["message"]?.ToString() ?? string.Empty;
+                var requestId = errorNode["requestId"]?.ToString() ?? root["requestId"]?.ToString() ?? string.Empty;
+
+                var dataNode = errorNode["data"] ?? root["data"];
+                var dataJson = dataNode != null ? dataNode.ToString(Formatting.None) : string.Empty;
+
+                parsed = new ParsedServerError
+                {
+                    RawJson = json,
+                    Message = message,
+                    RequestId = requestId,
+                    DataJson = dataJson,
+                    Code = code
+                };
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private sealed class ParsedServerError
+        {
+            public static ParsedServerError Empty { get; } = new ParsedServerError
+            {
+                RawJson = string.Empty,
+                Message = string.Empty,
+                RequestId = string.Empty,
+                DataJson = string.Empty,
+                Code = null
+            };
+
+            public string RawJson { get; init; }
+            public string Message { get; init; }
+            public string RequestId { get; init; }
+            public string DataJson { get; init; }
+            public int? Code { get; init; }
         }
     }
 }
