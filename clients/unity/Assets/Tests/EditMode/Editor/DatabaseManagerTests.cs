@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading;
 using NUnit.Framework;
 using UnityEngine;
 using SpaceTraders.Core;
@@ -30,6 +31,8 @@ namespace SpaceTraders.Tests
         [TearDown]
         public void TearDown()
         {
+            _dbManager?.CloseConnection();
+
             // Close database and destroy GameObject
             if (_dbGo != null)
             {
@@ -43,18 +46,50 @@ namespace SpaceTraders.Tests
             {
                 if (!string.IsNullOrEmpty(_dbPath))
                 {
-                    if (File.Exists(_dbPath)) File.Delete(_dbPath);
+                    TryDeleteFileWithRetry(_dbPath, 3, 25);
 
                     string testDir = Path.GetDirectoryName(_dbPath);
                     if (!string.IsNullOrEmpty(testDir) && Directory.Exists(testDir))
                     {
-                        Directory.Delete(testDir, true);
+                        TryDeleteDirectoryWithRetry(testDir, 3, 25);
                     }
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"[DatabaseManagerTests] Test DB cleanup failed: {ex.Message}");
+            }
+        }
+
+        private static void TryDeleteFileWithRetry(string filePath, int attempts, int delayMs)
+        {
+            for (int i = 0; i < attempts; i++)
+            {
+                try
+                {
+                    if (File.Exists(filePath)) File.Delete(filePath);
+                    return;
+                }
+                catch (IOException) when (i < attempts - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+        }
+
+        private static void TryDeleteDirectoryWithRetry(string dirPath, int attempts, int delayMs)
+        {
+            for (int i = 0; i < attempts; i++)
+            {
+                try
+                {
+                    if (Directory.Exists(dirPath)) Directory.Delete(dirPath, true);
+                    return;
+                }
+                catch (IOException) when (i < attempts - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
             }
         }
 

@@ -17,13 +17,13 @@ namespace SpaceTraders.API
         private const long PersistentCacheMaxAge = 24 * 60 * 60; // 24 hours
 
         private SpaceTradersClient _client;
-        private DatabaseManager _dbManager;
+        private IApiCacheRepository _cacheRepository;
 
         [Inject]
-        public void Construct(SpaceTradersClient client, DatabaseManager dbManager)
+        internal void Construct(SpaceTradersClient client, IApiCacheRepository cacheRepository)
         {
             _client = client;
-            _dbManager = dbManager;
+            _cacheRepository = cacheRepository;
         }
 
         public async Task<Register201Response> Register(string symbol, string faction)
@@ -50,7 +50,7 @@ namespace SpaceTraders.API
         public async Task<GetSystems200Response> GetSystems(int page = 1, int limit = 10)
         {
             string cacheKey = $"systems_p{page}_l{limit}";
-            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _cacheRepository.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -70,14 +70,14 @@ namespace SpaceTraders.API
             
             Log.Info("[APIService] Received systems page {Page} from network. Caching...", page);
             string json = JsonConvert.SerializeObject(response);
-            _dbManager.SetCache(cacheKey, json);
+            _cacheRepository.SetCache(cacheKey, json);
             return response;
         }
 
         public async Task<GetSystem200Response> GetSystem(string systemSymbol)
         {
             string cacheKey = $"system_{systemSymbol}";
-            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _cacheRepository.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -97,14 +97,14 @@ namespace SpaceTraders.API
             
             Log.Info("[APIService] Received system {System} from network. Caching...", systemSymbol);
             string json = JsonConvert.SerializeObject(response);
-            _dbManager.SetCache(cacheKey, json);
+            _cacheRepository.SetCache(cacheKey, json);
             return response;
         }
 
         public async Task<GetSystemWaypoints200Response> GetSystemWaypoints(string systemSymbol)
         {
             string cacheKey = $"system_waypoints_{systemSymbol}";
-            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _cacheRepository.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -154,7 +154,7 @@ namespace SpaceTraders.API
                 {
                     firstPage.Data = allWaypoints;
                     string fullJson = JsonConvert.SerializeObject(firstPage);
-                    _dbManager.SetCache(cacheKey, fullJson);
+                    _cacheRepository.SetCache(cacheKey, fullJson);
                     return firstPage;
                 }
             }
@@ -190,7 +190,7 @@ namespace SpaceTraders.API
         public async Task<GetFactions200Response> GetFactions(int page = 1, int limit = 10)
         {
             string cacheKey = $"factions_p{page}_l{limit}";
-            string cachedJson = _dbManager.GetCache(cacheKey, PersistentCacheMaxAge);
+            string cachedJson = _cacheRepository.GetCache(cacheKey, PersistentCacheMaxAge);
 
             if (!string.IsNullOrEmpty(cachedJson))
             {
@@ -210,7 +210,7 @@ namespace SpaceTraders.API
             
             Log.Info("[APIService] Received factions from network. Caching...", page);
             string json = JsonConvert.SerializeObject(response);
-            _dbManager.SetCache(cacheKey, json);
+            _cacheRepository.SetCache(cacheKey, json);
             return response;
         }
 

@@ -1,14 +1,13 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
+using System.IO;
 using SQLite;
-using UnityEngine;
-using VContainer;
 using Unity.Logging;
+using UnityEngine;
 
 namespace SpaceTraders.Core
 {
-    public class DatabaseManager : MonoBehaviour
+    public class DatabaseManager : MonoBehaviour, IApiCacheRepository, ISystemIndexRepository, IJumpGateRepository
     {
         private const string DefaultDatabaseFileName = "spacetraders_v2.db";
         private const string DatabasePathOverrideEnvVar = "SPACETRADERS_DB_PATH";
@@ -17,8 +16,13 @@ namespace SpaceTraders.Core
         public static string GlobalDatabasePathOverride { get; set; }
 
         [SerializeField] private string _databasePathOverride;
+
         private string _dbPath;
         private SQLiteConnection _db;
+
+        private IApiCacheRepository _apiCacheRepository;
+        private ISystemIndexRepository _systemIndexRepository;
+        private IJumpGateRepository _jumpGateRepository;
 
         public SQLiteConnection Connection
         {
@@ -30,9 +34,38 @@ namespace SpaceTraders.Core
                     {
                         _dbPath = ResolveDatabasePath();
                     }
+
                     InitializeDatabase();
                 }
+
                 return _db;
+            }
+        }
+
+        private IApiCacheRepository ApiCacheRepository
+        {
+            get
+            {
+                EnsureRepositoriesInitialized();
+                return _apiCacheRepository;
+            }
+        }
+
+        private ISystemIndexRepository SystemIndexRepository
+        {
+            get
+            {
+                EnsureRepositoriesInitialized();
+                return _systemIndexRepository;
+            }
+        }
+
+        private IJumpGateRepository JumpGateRepository
+        {
+            get
+            {
+                EnsureRepositoriesInitialized();
+                return _jumpGateRepository;
             }
         }
 
@@ -68,7 +101,27 @@ namespace SpaceTraders.Core
             {
                 _dbPath = ResolveDatabasePath();
             }
+
             InitializeDatabase();
+            EnsureRepositoriesInitialized();
+        }
+
+        private void EnsureRepositoriesInitialized()
+        {
+            if (_apiCacheRepository == null)
+            {
+                _apiCacheRepository = new SqliteApiCacheRepository(() => Connection);
+            }
+
+            if (_systemIndexRepository == null)
+            {
+                _systemIndexRepository = new SqliteSystemIndexRepository(() => Connection);
+            }
+
+            if (_jumpGateRepository == null)
+            {
+                _jumpGateRepository = new SqliteJumpGateRepository(() => Connection);
+            }
         }
 
         private void InitializeDatabase()
@@ -76,20 +129,22 @@ namespace SpaceTraders.Core
             try
             {
                 string dir = Path.GetDirectoryName(_dbPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
 
                 Log.Info("[DatabaseManager] Connecting to {Path}", _dbPath);
                 _db = new SQLiteConnection(_dbPath);
-                
-                // Use ExecuteScalar for pragmas that return values to avoid "not an error" exceptions
+
+                // Use ExecuteScalar for pragmas that return values to avoid noisy sqlite exceptions.
                 try { _db.ExecuteScalar<string>("PRAGMA journal_mode = WAL"); } catch { }
                 try { _db.ExecuteScalar<int>("PRAGMA synchronous = NORMAL"); } catch { }
-                
-                // Create tables
+
                 _db.CreateTable<ApiCacheEntry>();
                 _db.CreateTable<IndexedSystem>();
                 _db.CreateTable<IndexedJumpGate>();
-                
+
                 Log.Info("[DatabaseManager] SQLite initialized successfully.");
             }
             catch (Exception e)
@@ -101,11 +156,192 @@ namespace SpaceTraders.Core
 
         public void SetCache(string key, string json)
         {
-            var db = Connection;
-            if (db == null) return;
+            ApiCacheRepository.SetCache(key, json);
+        }
+
+        public string GetCache(string key, long maxAgeSeconds)
+        {
+            return ApiCacheRepository.GetCache(key, maxAgeSeconds);
+        }
+
+        public void ClearCache()
+        {
+            ApiCacheRepository.ClearCache();
+        }
+
+        public List<IndexedSystem> GetAllSystems()
+        {
+            return SystemIndexRepository.GetAllSystems();
+        }
+
+        public void StoreSystems(IEnumerable<IndexedSystem> systems)
+        {
+            SystemIndexRepository.StoreSystems(systems);
+        }
+
+        public List<IndexedSystem> SearchSystems(string symbolPattern)
+        {
+            return SystemIndexRepository.SearchSystems(symbolPattern);
+        }
+
+        public int GetIndexedSystemCount()
+        {
+            return SystemIndexRepository.GetIndexedSystemCount();
+        }
+
+        public void StoreJumpGateWaypoints(IEnumerable<(string waypointSymbol, string systemSymbol)> waypoints)
+        {
+            JumpGateRepository.StoreJumpGateWaypoints(waypoints);
+        }
+
+        public void StoreJumpGateConnections(string waypointSymbol, List<string> connections)
+        {
+            JumpGateRepository.StoreJumpGateConnections(waypointSymbol, connections);
+        }
+
+        public List<IndexedJumpGate> GetPendingJumpGates()
+        {
+            return JumpGateRepository.GetPendingJumpGates();
+        }
+
+        public List<IndexedJumpGate> GetAllJumpGateConnections()
+        {
+            return JumpGateRepository.GetAllJumpGateConnections();
+        }
+
+        public int GetIndexedJumpGateCount()
+        {
+            return JumpGateRepository.GetIndexedJumpGateCount();
+        }
+
+        /// <summary>
+        /// Closes the active SQLite connection if one exists.
+        /// Primarily intended for deterministic teardown in tests.
+        /// </summary>
+        public void CloseConnection()
+        {
+            if (_db == null)
+            {
+                return;
+            }
+
             try
             {
-                var entry = new ApiCacheEntry
+                _db.Close();
+            }
+            catch (Exception e)
+            {
+                Log.Warning("[DatabaseManager] CloseConnection failed: {Error}", e.Message);
+            }
+            finally
+            {
+                _db = null;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            CloseConnection();
+        }
+
+        [Table("api_cache")]
+        public class ApiCacheEntry
+        {
+            [PrimaryKey]
+            public string CacheKey { get; set; }
+
+            public string JsonData { get; set; }
+
+            public long Timestamp { get; set; }
+        }
+
+        [Table("systems_index")]
+        public class IndexedSystem
+        {
+            [PrimaryKey]
+            public string Symbol { get; set; }
+
+            public string SectorSymbol { get; set; }
+
+            public string Type { get; set; }
+
+            public int X { get; set; }
+
+            public int Y { get; set; }
+
+            public int WaypointCount { get; set; }
+
+            public string KnownFacilities { get; set; }
+        }
+
+        [Table("jump_gate_index")]
+        public class IndexedJumpGate
+        {
+            [PrimaryKey]
+            public string WaypointSymbol { get; set; }
+
+            public string SystemSymbol { get; set; }
+
+            /// <summary>
+            /// Comma-separated list of connected waypoint symbols, or null if not yet fetched.
+            /// </summary>
+            public string ConnectionsJson { get; set; }
+        }
+    }
+
+    internal interface IApiCacheRepository
+    {
+        void SetCache(string key, string json);
+
+        string GetCache(string key, long maxAgeSeconds);
+
+        void ClearCache();
+    }
+
+    internal interface ISystemIndexRepository
+    {
+        List<DatabaseManager.IndexedSystem> GetAllSystems();
+
+        void StoreSystems(IEnumerable<DatabaseManager.IndexedSystem> systems);
+
+        List<DatabaseManager.IndexedSystem> SearchSystems(string symbolPattern);
+
+        int GetIndexedSystemCount();
+    }
+
+    internal interface IJumpGateRepository
+    {
+        void StoreJumpGateWaypoints(IEnumerable<(string waypointSymbol, string systemSymbol)> waypoints);
+
+        void StoreJumpGateConnections(string waypointSymbol, List<string> connections);
+
+        List<DatabaseManager.IndexedJumpGate> GetPendingJumpGates();
+
+        List<DatabaseManager.IndexedJumpGate> GetAllJumpGateConnections();
+
+        int GetIndexedJumpGateCount();
+    }
+
+    internal sealed class SqliteApiCacheRepository : IApiCacheRepository
+    {
+        private readonly Func<SQLiteConnection> _getConnection;
+
+        public SqliteApiCacheRepository(Func<SQLiteConnection> getConnection)
+        {
+            _getConnection = getConnection;
+        }
+
+        public void SetCache(string key, string json)
+        {
+            var db = _getConnection();
+            if (db == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var entry = new DatabaseManager.ApiCacheEntry
                 {
                     CacheKey = key,
                     JsonData = json,
@@ -121,36 +357,43 @@ namespace SpaceTraders.Core
 
         public string GetCache(string key, long maxAgeSeconds)
         {
-            var db = Connection;
-            if (db == null) return null;
+            var db = _getConnection();
+            if (db == null)
+            {
+                return null;
+            }
+
             try
             {
-                var entry = db.Table<ApiCacheEntry>().Where(x => x.CacheKey == key).FirstOrDefault();
-                if (entry != null)
+                var entry = db.Table<DatabaseManager.ApiCacheEntry>().Where(x => x.CacheKey == key).FirstOrDefault();
+                if (entry == null)
                 {
-                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    if (now - entry.Timestamp < maxAgeSeconds)
-                    {
-                        return entry.JsonData;
-                    }
+                    return null;
                 }
+
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                return now - entry.Timestamp < maxAgeSeconds ? entry.JsonData : null;
             }
             catch (Exception e)
             {
                 Log.Warning("[DatabaseManager] GetCache failed: {Error}", e.Message);
+                return null;
             }
-            return null;
         }
 
         public void ClearCache()
         {
-            var db = Connection;
-            if (db == null) return;
+            var db = _getConnection();
+            if (db == null)
+            {
+                return;
+            }
+
             try
             {
-                db.DeleteAll<ApiCacheEntry>();
-                db.DeleteAll<IndexedSystem>();
-                db.DeleteAll<IndexedJumpGate>();
+                db.DeleteAll<DatabaseManager.ApiCacheEntry>();
+                db.DeleteAll<DatabaseManager.IndexedSystem>();
+                db.DeleteAll<DatabaseManager.IndexedJumpGate>();
                 Log.Info("[DatabaseManager] All cached data cleared.");
             }
             catch (Exception e)
@@ -158,25 +401,51 @@ namespace SpaceTraders.Core
                 Log.Error("[DatabaseManager] ClearCache failed: {Error}", e.Message);
             }
         }
+    }
 
-        // --- Efficient Universe Querying ---
+    internal sealed class SqliteSystemIndexRepository : ISystemIndexRepository
+    {
+        private readonly Func<SQLiteConnection> _getConnection;
 
-        public List<IndexedSystem> GetAllSystems()
+        public SqliteSystemIndexRepository(Func<SQLiteConnection> getConnection)
         {
-            var db = Connection;
-            if (db == null) return new List<IndexedSystem>();
-            try { return db.Table<IndexedSystem>().ToList(); }
-            catch { return new List<IndexedSystem>(); }
+            _getConnection = getConnection;
         }
 
-        public void StoreSystems(IEnumerable<IndexedSystem> systems)
+        public List<DatabaseManager.IndexedSystem> GetAllSystems()
         {
-            var db = Connection;
-            if (db == null) return;
+            var db = _getConnection();
+            if (db == null)
+            {
+                return new List<DatabaseManager.IndexedSystem>();
+            }
+
             try
             {
-                db.RunInTransaction(() => {
-                    foreach (var s in systems) db.InsertOrReplace(s);
+                return db.Table<DatabaseManager.IndexedSystem>().ToList();
+            }
+            catch
+            {
+                return new List<DatabaseManager.IndexedSystem>();
+            }
+        }
+
+        public void StoreSystems(IEnumerable<DatabaseManager.IndexedSystem> systems)
+        {
+            var db = _getConnection();
+            if (db == null)
+            {
+                return;
+            }
+
+            try
+            {
+                db.RunInTransaction(() =>
+                {
+                    foreach (var system in systems)
+                    {
+                        db.InsertOrReplace(system);
+                    }
                 });
             }
             catch (Exception e)
@@ -185,56 +454,81 @@ namespace SpaceTraders.Core
             }
         }
 
-        public List<IndexedSystem> SearchSystems(string symbolPattern)
+        public List<DatabaseManager.IndexedSystem> SearchSystems(string symbolPattern)
         {
-            var db = Connection;
-            if (db == null) return new List<IndexedSystem>();
-            try 
+            var db = _getConnection();
+            if (db == null)
             {
-                var query = db.Table<IndexedSystem>();
+                return new List<DatabaseManager.IndexedSystem>();
+            }
+
+            try
+            {
+                var query = db.Table<DatabaseManager.IndexedSystem>();
                 if (!string.IsNullOrEmpty(symbolPattern))
                 {
-                    query = query.Where(s => s.Symbol.Contains(symbolPattern));
+                    query = query.Where(system => system.Symbol.Contains(symbolPattern));
                 }
+
                 return query.Take(100).ToList();
             }
             catch (Exception e)
             {
                 Log.Error("[DatabaseManager] Search failed: {Error}", e.Message);
-                return new List<IndexedSystem>();
+                return new List<DatabaseManager.IndexedSystem>();
             }
         }
 
         public int GetIndexedSystemCount()
         {
-            var db = Connection;
-            if (db == null) return 0;
-            try { return db.Table<IndexedSystem>().Count(); }
-            catch { return 0; }
+            var db = _getConnection();
+            if (db == null)
+            {
+                return 0;
+            }
+
+            try
+            {
+                return db.Table<DatabaseManager.IndexedSystem>().Count();
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+    }
+
+    internal sealed class SqliteJumpGateRepository : IJumpGateRepository
+    {
+        private readonly Func<SQLiteConnection> _getConnection;
+
+        public SqliteJumpGateRepository(Func<SQLiteConnection> getConnection)
+        {
+            _getConnection = getConnection;
         }
 
-        // --- Jump Gate Index ---
-
-        /// <summary>
-        /// Stores JUMP_GATE waypoint stubs (no connections yet). Uses InsertOrIgnore so
-        /// already-fetched records are never overwritten.
-        /// </summary>
         public void StoreJumpGateWaypoints(IEnumerable<(string waypointSymbol, string systemSymbol)> waypoints)
         {
-            var db = Connection;
-            if (db == null) return;
+            var db = _getConnection();
+            if (db == null)
+            {
+                return;
+            }
+
             try
             {
                 db.RunInTransaction(() =>
                 {
-                    foreach (var (wp, sys) in waypoints)
+                    foreach (var (waypointSymbol, systemSymbol) in waypoints)
                     {
-                        db.Insert(new IndexedJumpGate
-                        {
-                            WaypointSymbol = wp,
-                            SystemSymbol = sys,
-                            ConnectionsJson = null
-                        }, "OR IGNORE");
+                        db.Insert(
+                            new DatabaseManager.IndexedJumpGate
+                            {
+                                WaypointSymbol = waypointSymbol,
+                                SystemSymbol = systemSymbol,
+                                ConnectionsJson = null
+                            },
+                            "OR IGNORE");
                     }
                 });
             }
@@ -244,21 +538,18 @@ namespace SpaceTraders.Core
             }
         }
 
-        /// <summary>
-        /// Persists the fetched connection list for a given JUMP_GATE waypoint.
-        /// </summary>
         public void StoreJumpGateConnections(string waypointSymbol, List<string> connections)
         {
-            var db = Connection;
-            if (db == null) return;
+            var db = _getConnection();
+            if (db == null)
+            {
+                return;
+            }
+
             try
             {
-                string json = connections != null
-                    ? string.Join(",", connections)
-                    : string.Empty;
-                db.Execute(
-                    "UPDATE jump_gate_index SET ConnectionsJson = ? WHERE WaypointSymbol = ?",
-                    json, waypointSymbol);
+                string csv = connections != null ? string.Join(",", connections) : string.Empty;
+                db.Execute("UPDATE jump_gate_index SET ConnectionsJson = ? WHERE WaypointSymbol = ?", csv, waypointSymbol);
             }
             catch (Exception e)
             {
@@ -266,90 +557,64 @@ namespace SpaceTraders.Core
             }
         }
 
-        /// <summary>
-        /// Returns waypoints whose connection data has not yet been fetched.
-        /// </summary>
-        public List<IndexedJumpGate> GetPendingJumpGates()
+        public List<DatabaseManager.IndexedJumpGate> GetPendingJumpGates()
         {
-            var db = Connection;
-            if (db == null) return new List<IndexedJumpGate>();
+            var db = _getConnection();
+            if (db == null)
+            {
+                return new List<DatabaseManager.IndexedJumpGate>();
+            }
+
             try
             {
-                return db.Table<IndexedJumpGate>()
-                    .Where(j => j.ConnectionsJson == null)
+                return db.Table<DatabaseManager.IndexedJumpGate>()
+                    .Where(jumpGate => jumpGate.ConnectionsJson == null)
                     .ToList();
             }
             catch (Exception e)
             {
                 Log.Error("[DatabaseManager] GetPendingJumpGates failed: {Error}", e.Message);
-                return new List<IndexedJumpGate>();
+                return new List<DatabaseManager.IndexedJumpGate>();
             }
         }
 
-        /// <summary>
-        /// Returns all jump gate entries that have fetched connection data.
-        /// </summary>
-        public List<IndexedJumpGate> GetAllJumpGateConnections()
+        public List<DatabaseManager.IndexedJumpGate> GetAllJumpGateConnections()
         {
-            var db = Connection;
-            if (db == null) return new List<IndexedJumpGate>();
+            var db = _getConnection();
+            if (db == null)
+            {
+                return new List<DatabaseManager.IndexedJumpGate>();
+            }
+
             try
             {
-                return db.Table<IndexedJumpGate>()
-                    .Where(j => j.ConnectionsJson != null)
+                return db.Table<DatabaseManager.IndexedJumpGate>()
+                    .Where(jumpGate => jumpGate.ConnectionsJson != null)
                     .ToList();
             }
             catch (Exception e)
             {
                 Log.Error("[DatabaseManager] GetAllJumpGateConnections failed: {Error}", e.Message);
-                return new List<IndexedJumpGate>();
+                return new List<DatabaseManager.IndexedJumpGate>();
             }
         }
 
         public int GetIndexedJumpGateCount()
         {
-            var db = Connection;
-            if (db == null) return 0;
-            try { return db.Table<IndexedJumpGate>().Count(); }
-            catch { return 0; }
-        }
+            var db = _getConnection();
+            if (db == null)
+            {
+                return 0;
+            }
 
-        private void OnDestroy()
-        {
-            _db?.Close();
-        }
-
-        [Table("api_cache")]
-        public class ApiCacheEntry
-        {
-            [PrimaryKey]
-            public string CacheKey { get; set; }
-            public string JsonData { get; set; }
-            public long Timestamp { get; set; }
-        }
-
-        [Table("systems_index")]
-        public class IndexedSystem
-        {
-            [PrimaryKey]
-            public string Symbol { get; set; }
-            public string SectorSymbol { get; set; }
-            public string Type { get; set; }
-            public int X { get; set; }
-            public int Y { get; set; }
-            public int WaypointCount { get; set; }
-        }
-
-        [Table("jump_gate_index")]
-        public class IndexedJumpGate
-        {
-            [PrimaryKey]
-            public string WaypointSymbol { get; set; }
-            public string SystemSymbol { get; set; }
-            /// <summary>
-            /// Comma-separated list of connected waypoint symbols, or null if not yet fetched.
-            /// </summary>
-            public string ConnectionsJson { get; set; }
+            try
+            {
+                return db.Table<DatabaseManager.IndexedJumpGate>().Count();
+            }
+            catch
+            {
+                return 0;
+            }
         }
     }
 }

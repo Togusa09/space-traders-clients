@@ -100,14 +100,14 @@ namespace SpaceTraders.UI
 
         private void OnPlayClicked()
         {
-            Log.Info("[MenuManager] Play clicked. Loading GameplayPlaceholder.");
-            SceneManager.LoadScene("GameplayPlaceholder");
+            Log.Info("[MenuManager] Play clicked. Loading Gameplay.");
+            SceneManager.LoadScene(SceneNames.Gameplay);
         }
 
         private void OnSettingsClicked()
         {
             Log.Info("[MenuManager] Settings clicked. Loading Settings.");
-            SceneManager.LoadScene("Settings");
+            SceneManager.LoadScene(SceneNames.Settings);
         }
 
         private void OnQuitClicked()

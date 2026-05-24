@@ -18,6 +18,9 @@ namespace SpaceTraders
             // Register Managers/Services as Singletons in the Project Root.
             // These should be attached to the GameLifetimeScope prefab or its children.
             builder.RegisterComponentInHierarchy<DatabaseManager>();
+            builder.Register<IApiCacheRepository>(resolver => resolver.Resolve<DatabaseManager>(), Lifetime.Singleton);
+            builder.Register<ISystemIndexRepository>(resolver => resolver.Resolve<DatabaseManager>(), Lifetime.Singleton);
+            builder.Register<IJumpGateRepository>(resolver => resolver.Resolve<DatabaseManager>(), Lifetime.Singleton);
             builder.RegisterComponentInHierarchy<AuthManager>();
             builder.RegisterComponentInHierarchy<SpaceTradersClient>();
             builder.RegisterComponentInHierarchy<APIService>();

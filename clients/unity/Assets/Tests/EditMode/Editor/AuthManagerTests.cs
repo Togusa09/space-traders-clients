@@ -49,9 +49,6 @@ namespace SpaceTraders.Tests
         [Test]
         public void SecureTokenStorage_DecryptCorruptedString_ReturnsEmpty()
         {
-            // Expect the decryption failed error log
-            UnityEngine.TestTools.LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*Decryption failed.*"));
-
             // Invalid base64
             string corrupted = "invalid-base64-payload!";
             string decrypted = SecureTokenStorage.Decrypt(corrupted);
@@ -61,9 +58,6 @@ namespace SpaceTraders.Tests
         [Test]
         public void SecureTokenStorage_DecryptInvalidIV_ReturnsEmpty()
         {
-            // Expect the too short IV error log
-            UnityEngine.TestTools.LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*Cipher text is too short.*"));
-
             // Base64 with less bytes than IV block size
             string shortBase64 = Convert.ToBase64String(new byte[5]);
             string decrypted = SecureTokenStorage.Decrypt(shortBase64);

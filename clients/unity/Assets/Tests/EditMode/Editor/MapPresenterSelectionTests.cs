@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using NUnit.Framework;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
@@ -15,16 +14,13 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            SetPrivateField(presenter, "_filteredSystems", new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
             {
                 new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
                 new DatabaseManager.IndexedSystem { Symbol = "B-SYS", X = 10, Y = 0 }
             });
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestGalaxySystem", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestGalaxySystem to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(2.0f, 0f), 5.0f }) as DatabaseManager.IndexedSystem;
+            var result = presenter.FindClosestGalaxySystemForTest(new Vector2(2.0f, 0f), 5.0f);
 
             Assert.NotNull(result);
             Assert.AreEqual("A-SYS", result.Symbol);
@@ -48,14 +44,37 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 },
                 factions: new List<SystemFaction>());
 
-            SetPrivateField(presenter, "_currentSystem", currentSystem);
+            presenter.SetCurrentSystemForTest(currentSystem);
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestSystemWaypoint", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestSystemWaypoint to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(100f, 100f), 3.0f }) as SystemWaypoint;
+            var result = presenter.FindClosestSystemWaypointForTest(new Vector2(100f, 100f), 3.0f);
 
             Assert.IsNull(result);
+        }
+
+        [Test]
+        public void FindClosestSystemWaypoint_ReturnsNearestWithinThreshold()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            var currentSystem = new SpaceTraders.Generated.Model.System(
+                symbol: "X1-TEST",
+                sectorSymbol: "X1",
+                type: SystemType.NEUTRONSTAR,
+                x: 0,
+                y: 0,
+                waypoints: new List<SystemWaypoint>
+                {
+                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>()),
+                    new SystemWaypoint("X1-TEST-B", WaypointType.MOON, 20, 0, new List<WaypointOrbital>())
+                },
+                factions: new List<SystemFaction>());
+
+            presenter.SetCurrentSystemForTest(currentSystem);
+
+            var result = presenter.FindClosestSystemWaypointForTest(new Vector2(1f, 0f), 5.0f);
+
+            Assert.NotNull(result);
+            Assert.AreEqual("X1-TEST-A", result.Symbol);
         }
 
         [Test]
@@ -63,15 +82,12 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            SetPrivateField(presenter, "_filteredSystems", new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
             {
                 new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
             });
 
-            var method = typeof(MapPresenter).GetMethod("FindClosestGalaxySystem", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method FindClosestGalaxySystem to exist.");
-
-            var result = method.Invoke(presenter, new object[] { new Vector2(100f, 100f), 2.0f }) as DatabaseManager.IndexedSystem;
+            var result = presenter.FindClosestGalaxySystemForTest(new Vector2(100f, 100f), 2.0f);
 
             Assert.IsNull(result);
         }
@@ -81,22 +97,19 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            SetPrivateField(presenter, "_filteredSystems", new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
             {
                 new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
                 new DatabaseManager.IndexedSystem { Symbol = "B-SYS", X = 12, Y = 0 }
             });
-            SetPrivateField(presenter, "_mapMode", ParseMapMode("Galaxy"));
+            presenter.SetMapModeForTest(systemMode: false);
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
+            presenter.HandleMapClickForTest(new Vector2(1f, 0f));
 
-            method.Invoke(presenter, new object[] { new Vector2(1f, 0f) });
-
-            Assert.AreEqual("A-SYS", GetPrivateField<string>(presenter, "_selectedSymbol"));
-            Assert.AreEqual("A-SYS", GetPrivateField<string>(presenter, "_selectedSystemSymbol"));
+            Assert.AreEqual("A-SYS", presenter.GetSelectedSymbolForTest());
+            Assert.AreEqual("A-SYS", presenter.GetSelectedSystemSymbolForTest());
         }
 
         [Test]
@@ -117,17 +130,60 @@ namespace SpaceTraders.Tests.EditMode.Editor
                 },
                 factions: new List<SystemFaction>());
 
-            SetPrivateField(presenter, "_currentSystem", currentSystem);
-            SetPrivateField(presenter, "_mapMode", ParseMapMode("System"));
+            presenter.SetCurrentSystemForTest(currentSystem);
+            presenter.SetMapModeForTest(systemMode: true);
             presenter.MapZoom = 1.0f;
             presenter.MapOffset = Vector2.zero;
 
-            var method = typeof(MapPresenter).GetMethod("HandleMapClick", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, "Expected private method HandleMapClick to exist.");
+            presenter.HandleMapClickForTest(new Vector2(2f, 0f));
 
-            method.Invoke(presenter, new object[] { new Vector2(2f, 0f) });
+            Assert.AreEqual("X1-TEST-A", presenter.GetSelectedSymbolForTest());
+        }
 
-            Assert.AreEqual("X1-TEST-A", GetPrivateField<string>(presenter, "_selectedSymbol"));
+        [Test]
+        public void HandleMapClick_GalaxyMode_OutsideThreshold_DoesNotSelect()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
+            {
+                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
+            });
+            presenter.SetMapModeForTest(systemMode: false);
+            presenter.MapZoom = 1.0f;
+            presenter.MapOffset = Vector2.zero;
+
+            presenter.HandleMapClickForTest(new Vector2(100f, 100f));
+
+            Assert.IsNull(presenter.GetSelectedSymbolForTest());
+            Assert.IsNull(presenter.GetSelectedSystemSymbolForTest());
+        }
+
+        [Test]
+        public void HandleMapClick_SystemMode_OutsideThreshold_DoesNotSelect()
+        {
+            var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
+
+            var currentSystem = new SpaceTraders.Generated.Model.System(
+                symbol: "X1-TEST",
+                sectorSymbol: "X1",
+                type: SystemType.NEUTRONSTAR,
+                x: 0,
+                y: 0,
+                waypoints: new List<SystemWaypoint>
+                {
+                    new SystemWaypoint("X1-TEST-A", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>())
+                },
+                factions: new List<SystemFaction>());
+
+            presenter.SetCurrentSystemForTest(currentSystem);
+            presenter.SetMapModeForTest(systemMode: true);
+            presenter.MapZoom = 1.0f;
+            presenter.MapOffset = Vector2.zero;
+
+            presenter.HandleMapClickForTest(new Vector2(100f, 100f));
+
+            Assert.IsNull(presenter.GetSelectedSymbolForTest());
         }
 
         [TearDown]
@@ -142,25 +198,5 @@ namespace SpaceTraders.Tests.EditMode.Editor
             }
         }
 
-        private static void SetPrivateField(object target, string fieldName, object value)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field, $"Expected private field '{fieldName}' to exist.");
-            field.SetValue(target, value);
-        }
-
-        private static T GetPrivateField<T>(object target, string fieldName)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field, $"Expected private field '{fieldName}' to exist.");
-            return (T)field.GetValue(target);
-        }
-
-        private static object ParseMapMode(string value)
-        {
-            var mapModeType = typeof(MapPresenter).GetNestedType("MapMode", BindingFlags.NonPublic);
-            Assert.NotNull(mapModeType, "Expected private enum MapMode to exist.");
-            return System.Enum.Parse(mapModeType, value);
-        }
     }
 }

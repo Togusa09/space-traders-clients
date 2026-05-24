@@ -72,7 +72,7 @@ namespace SpaceTraders.UI
 
             // Bind Global Buttons
             var backBtn = _root.Q<Button>("back-button");
-            if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene("MainMenu");
+            if (backBtn != null) backBtn.clicked += () => SceneManager.LoadScene(SceneNames.MainMenu);
 
             // Bind Sidebar/Tab Buttons
             _root.Q<Button>("tab-agent")?.RegisterCallback<ClickEvent>(evt => SwitchTab(Tab.Agent));
@@ -94,20 +94,25 @@ namespace SpaceTraders.UI
             
             Log.Info("[Dashboard] Switching to tab: {Tab}", tab);
 
-            if (tab == Tab.Map)
+            if (DashboardTabBehavior.IsPresenterManagedTab(tab))
             {
-                if (_mapPresenter != null)
-                {
-                    _mapPresenter.SetupMapPanel(_dataContainer);
-                }
-                else
-                {
-                    _dataContainer.Add(new Label("MapPresenter component not found on Dashboard GameObject."));
-                }
+                DisplayMapTab();
                 return;
             }
 
             _ = FetchAndDisplayTab(tab);
+        }
+
+        private void DisplayMapTab()
+        {
+            if (_mapPresenter != null)
+            {
+                _mapPresenter.SetupMapPanel(_dataContainer);
+            }
+            else
+            {
+                _dataContainer.Add(new Label("MapPresenter component not found on Dashboard GameObject."));
+            }
         }
 
         private async Task FetchAndDisplayTab(Tab tab)
@@ -118,25 +123,7 @@ namespace SpaceTraders.UI
             {
                 _client.SetToken(_authManager.AgentToken);
 
-                switch (tab)
-                {
-                    case Tab.Agent:
-                        var agentRes = await _apiService.GetMyAgent();
-                        DisplayAgent(agentRes.Data);
-                        break;
-                    case Tab.Contracts:
-                        var contractRes = await _apiService.GetContracts();
-                        DisplayContracts(contractRes.Data.ToArray());
-                        break;
-                    case Tab.Fleet:
-                        var fleetRes = await _apiService.GetShips();
-                        DisplayFleet(fleetRes.Data.ToArray());
-                        break;
-                    case Tab.Factions:
-                        var factionsRes = await _apiService.GetFactions();
-                        DisplayFactions(factionsRes.Data.ToArray());
-                        break;
-                }
+                await FetchAndRenderTabData(tab);
 
                 if (_statusLabel != null) _statusLabel.text = string.Empty;
             }
@@ -144,6 +131,31 @@ namespace SpaceTraders.UI
             {
                 Log.Error("[Dashboard] Refresh failed: {Error}", e.Message);
                 if (_statusLabel != null) _statusLabel.text = $"Error: {e.Message}";
+            }
+        }
+
+        private async Task FetchAndRenderTabData(Tab tab)
+        {
+            var payload = await DashboardTabDataRouter.FetchAsync(tab, _apiService);
+            RenderTabPayload(tab, payload);
+        }
+
+        private void RenderTabPayload(Tab tab, DashboardTabPayload payload)
+        {
+            switch (tab)
+            {
+                case Tab.Agent:
+                    DisplayAgent(payload.Agent);
+                    break;
+                case Tab.Contracts:
+                    DisplayContracts(payload.Contracts);
+                    break;
+                case Tab.Fleet:
+                    DisplayFleet(payload.Fleet);
+                    break;
+                case Tab.Factions:
+                    DisplayFactions(payload.Factions);
+                    break;
             }
         }
 
@@ -158,11 +170,7 @@ namespace SpaceTraders.UI
         private void DisplayAgent(Agent agent)
         {
             var root = GetContentRoot();
-            AddRow(root, "Symbol", agent.Symbol);
-            AddRow(root, "Headquarters", agent.Headquarters);
-            AddRow(root, "Credits", agent.Credits.ToString("N0"));
-            AddRow(root, "Starting Faction", agent.StartingFaction);
-            AddRow(root, "AccountId", agent.AccountId);
+            DashboardViewRenderer.RenderAgent(root, agent);
         }
 
         private void DisplayContracts(Contract[] contracts)
@@ -214,42 +222,116 @@ namespace SpaceTraders.UI
             var scroll = (ScrollView)GetContentRoot();
             foreach (var f in factions)
             {
-                scroll.Add(BindFaction(f));
+                scroll.Add(DashboardViewRenderer.BindFaction(f, factionTemplate));
             }
         }
 
-        private VisualElement BindFaction(Faction f)
+        // --- Polling for active views ---
+        private readonly DashboardPollingScheduler _pollingScheduler = new DashboardPollingScheduler(15f);
+        private void Update()
         {
-            if (factionTemplate == null) return new Label($"{f.Name} ({f.Symbol})");
-            
+            if (_pollingScheduler.ShouldPoll(Time.deltaTime, _currentTab))
+            {
+                _ = FetchAndDisplayTab(_currentTab);
+            }
+        }
+    }
+
+    internal static class DashboardTabBehavior
+    {
+        public static bool IsPresenterManagedTab(DashboardController.Tab tab)
+        {
+            return tab == DashboardController.Tab.Map;
+        }
+
+        public static bool ShouldPoll(DashboardController.Tab tab)
+        {
+            return tab != DashboardController.Tab.Map && tab != DashboardController.Tab.Agent;
+        }
+    }
+
+    internal static class DashboardViewRenderer
+    {
+        public static void RenderAgent(VisualElement root, Agent agent)
+        {
+            AddRow(root, "Symbol", agent.Symbol);
+            AddRow(root, "Headquarters", agent.Headquarters);
+            AddRow(root, "Credits", agent.Credits.ToString("N0"));
+            AddRow(root, "Starting Faction", agent.StartingFaction);
+            AddRow(root, "AccountId", agent.AccountId);
+        }
+
+        public static VisualElement BindFaction(Faction faction, VisualTreeAsset factionTemplate)
+        {
+            if (factionTemplate == null) return new Label($"{faction.Name} ({faction.Symbol})");
+
             var element = factionTemplate.Instantiate();
-            element.Q<Label>("name-label").text = $"Name: {f.Name}";
-            element.Q<Label>("details-label").text = $"Symbol: {f.Symbol} | HQ: {f.Headquarters}";
-            element.Q<Label>("description-label").text = f.Description;
+            element.Q<Label>("name-label").text = $"Name: {faction.Name}";
+            element.Q<Label>("details-label").text = $"Symbol: {faction.Symbol} | HQ: {faction.Headquarters}";
+            element.Q<Label>("description-label").text = faction.Description;
             return element;
         }
 
-        private void AddRow(VisualElement root, string key, string value)
+        private static void AddRow(VisualElement root, string key, string value)
         {
-            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };    
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row, marginBottom = 5 } };
             row.Add(new Label($"{key}: ") { style = { unityFontStyleAndWeight = FontStyle.Bold, width = 150, color = Color.gray } });
             row.Add(new Label(value) { style = { color = Color.white, flexGrow = 1 } });
             root.Add(row);
         }
+    }
 
-        // --- Polling for active views ---
-        private float _pollTimer = 0f;
-        private void Update()
+    internal sealed class DashboardPollingScheduler
+    {
+        private readonly float _intervalSeconds;
+        private float _elapsedSeconds;
+
+        public DashboardPollingScheduler(float intervalSeconds)
         {
-            _pollTimer += Time.deltaTime;
-            if (_pollTimer > 15f)
+            _intervalSeconds = intervalSeconds;
+        }
+
+        public bool ShouldPoll(float deltaTime, DashboardController.Tab currentTab)
+        {
+            _elapsedSeconds += deltaTime;
+            if (_elapsedSeconds <= _intervalSeconds) return false;
+
+            _elapsedSeconds = 0f;
+            return DashboardTabBehavior.ShouldPoll(currentTab);
+        }
+    }
+
+    internal sealed class DashboardTabPayload
+    {
+        public Agent Agent { get; set; }
+        public Contract[] Contracts { get; set; }
+        public Ship[] Fleet { get; set; }
+        public Faction[] Factions { get; set; }
+    }
+
+    internal static class DashboardTabDataRouter
+    {
+        public static async Task<DashboardTabPayload> FetchAsync(DashboardController.Tab tab, APIService apiService)
+        {
+            var payload = new DashboardTabPayload();
+
+            switch (tab)
             {
-                _pollTimer = 0f;
-                if (_currentTab != Tab.Map && _currentTab != Tab.Agent)
-                {
-                    _ = FetchAndDisplayTab(_currentTab);
-                }
+                case DashboardController.Tab.Agent:
+                    payload.Agent = (await apiService.GetMyAgent())?.Data;
+                    break;
+                case DashboardController.Tab.Contracts:
+                    payload.Contracts = (await apiService.GetContracts())?.Data?.ToArray();
+                    break;
+                case DashboardController.Tab.Fleet:
+                    payload.Fleet = (await apiService.GetShips())?.Data?.ToArray();
+                    break;
+                case DashboardController.Tab.Factions:
+                    payload.Factions = (await apiService.GetFactions())?.Data?.ToArray();
+                    break;
             }
+
+            return payload;
         }
     }
 }
