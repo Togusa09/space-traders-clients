@@ -12,7 +12,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void MatchesGalaxySystem_NormalizesTypeFilterToken()
         {
-            var system = new DatabaseManager.IndexedSystem
+            var system = new IndexedSystem
             {
                 Symbol = "X1-TEST",
                 Type = "NEUTRON_STAR",
@@ -26,7 +26,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void MatchesGalaxySystem_RespectsFacilityFilter()
         {
-            var system = new DatabaseManager.IndexedSystem
+            var system = new IndexedSystem
             {
                 Symbol = "X1-TEST",
                 Type = "NEUTRON_STAR",

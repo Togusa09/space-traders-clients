@@ -14,10 +14,10 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<IndexedSystem>
             {
-                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
-                new DatabaseManager.IndexedSystem { Symbol = "B-SYS", X = 10, Y = 0 }
+                new IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
+                new IndexedSystem { Symbol = "B-SYS", X = 10, Y = 0 }
             });
 
             var result = presenter.FindClosestGalaxySystemForTest(new Vector2(2.0f, 0f), 5.0f);
@@ -82,9 +82,9 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<IndexedSystem>
             {
-                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
+                new IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
             });
 
             var result = presenter.FindClosestGalaxySystemForTest(new Vector2(100f, 100f), 2.0f);
@@ -97,10 +97,10 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<IndexedSystem>
             {
-                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
-                new DatabaseManager.IndexedSystem { Symbol = "B-SYS", X = 12, Y = 0 }
+                new IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 },
+                new IndexedSystem { Symbol = "B-SYS", X = 12, Y = 0 }
             });
             presenter.SetMapModeForTest(systemMode: false);
             presenter.MapZoom = 1.0f;
@@ -145,9 +145,9 @@ namespace SpaceTraders.Tests.EditMode.Editor
         {
             var presenter = new GameObject("MapPresenterTest").AddComponent<MapPresenter>();
 
-            presenter.SetFilteredSystemsForTest(new List<DatabaseManager.IndexedSystem>
+            presenter.SetFilteredSystemsForTest(new List<IndexedSystem>
             {
-                new DatabaseManager.IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
+                new IndexedSystem { Symbol = "A-SYS", X = 0, Y = 0 }
             });
             presenter.SetMapModeForTest(systemMode: false);
             presenter.MapZoom = 1.0f;

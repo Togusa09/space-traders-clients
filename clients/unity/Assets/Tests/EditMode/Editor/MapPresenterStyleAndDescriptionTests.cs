@@ -11,7 +11,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
         [Test]
         public void MapStyleResolver_GetSystemStyle_BlackHoleHasStroke()
         {
-            var system = new DatabaseManager.IndexedSystem { Symbol = "X1", Type = "BLACK_HOLE" };
+            var system = new IndexedSystem { Symbol = "X1", Type = "BLACK_HOLE" };
             var style = MapStyleResolver.GetSystemStyle(system);
 
             var strokeWidth = style.StrokeWidth;

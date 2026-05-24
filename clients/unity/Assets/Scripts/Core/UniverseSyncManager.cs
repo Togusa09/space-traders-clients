@@ -226,13 +226,13 @@ namespace SpaceTraders.Core
     {
         public int TotalSystemsExpected { get; set; }
         public int TotalPages { get; set; }
-        public List<DatabaseManager.IndexedSystem> IndexedSystems { get; set; } = new List<DatabaseManager.IndexedSystem>();
+        public List<IndexedSystem> IndexedSystems { get; set; } = new List<IndexedSystem>();
         public List<(string waypointSymbol, string systemSymbol)> JumpGateWaypoints { get; set; } = new List<(string, string)>();
     }
 
     internal static class UniverseSyncPageWorker
     {
-        public static UniverseSyncPageResult ProcessPage(GetSystems200Response response, Dictionary<string, DatabaseManager.IndexedSystem> existingSystems)
+        public static UniverseSyncPageResult ProcessPage(GetSystems200Response response, Dictionary<string, IndexedSystem> existingSystems)
         {
             if (response == null) return new UniverseSyncPageResult();
 
@@ -244,7 +244,7 @@ namespace SpaceTraders.Core
 
             foreach (var system in response.Data ?? Enumerable.Empty<SpaceTraders.Generated.Model.System>())
             {
-                var indexed = new DatabaseManager.IndexedSystem
+                var indexed = new IndexedSystem
                 {
                     Symbol = system.Symbol,
                     SectorSymbol = system.SectorSymbol,

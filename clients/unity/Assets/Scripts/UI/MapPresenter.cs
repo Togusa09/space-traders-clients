@@ -69,11 +69,11 @@ namespace SpaceTraders.UI
         private DropdownField _typeFilter;
         private DropdownField _facilityFilter;
 
-        private List<DatabaseManager.IndexedSystem> _allGalaxySystems;
-        private List<DatabaseManager.IndexedSystem> _filteredSystems;
-        private List<DatabaseManager.IndexedSystem> _pagedSystems;
+        private List<IndexedSystem> _allGalaxySystems;
+        private List<IndexedSystem> _filteredSystems;
+        private List<IndexedSystem> _pagedSystems;
         private List<(string FromSystem, string ToSystem)> _jumpGateSystemLinks = new List<(string, string)>();
-        private Dictionary<string, DatabaseManager.IndexedSystem> _galaxySystemLookup = new Dictionary<string, DatabaseManager.IndexedSystem>();
+        private Dictionary<string, IndexedSystem> _galaxySystemLookup = new Dictionary<string, IndexedSystem>();
         private readonly List<VisualElement> _listEntries = new List<VisualElement>();
 
         private ISystemIndexRepository _systemIndexRepository;
@@ -314,7 +314,7 @@ namespace SpaceTraders.UI
 
         private void ApplyGalaxyFilter()
         {
-            if (_allGalaxySystems == null) { _filteredSystems = new List<DatabaseManager.IndexedSystem>(); return; }
+            if (_allGalaxySystems == null) { _filteredSystems = new List<IndexedSystem>(); return; }
             string query = _searchField?.value?.ToUpper() ?? "";
             string typeFilter = _typeFilter?.value ?? "ALL";
             string facilityFilter = _facilityFilter?.value ?? "ALL";
@@ -329,7 +329,7 @@ namespace SpaceTraders.UI
             if (_allGalaxySystems != null && _allGalaxySystems.Count > 0) return;
             if (_apiService == null) return;
 
-            var loaded = new List<DatabaseManager.IndexedSystem>();
+            var loaded = new List<IndexedSystem>();
             int page = 1;
             try
             {
@@ -351,7 +351,7 @@ namespace SpaceTraders.UI
             catch (Exception e) { Log.Error("[Map] Load failed: {Error}", e.Message); }
         }
 
-        private void RebuildGalaxyLookup() => _galaxySystemLookup = _allGalaxySystems?.ToDictionary(s => s.Symbol, s => s) ?? new Dictionary<string, DatabaseManager.IndexedSystem>();
+        private void RebuildGalaxyLookup() => _galaxySystemLookup = _allGalaxySystems?.ToDictionary(s => s.Symbol, s => s) ?? new Dictionary<string, IndexedSystem>();
 
         private void LoadJumpGateConnections()
         {
@@ -396,7 +396,7 @@ namespace SpaceTraders.UI
             MapZoom = result.Zoom;
         }
 
-        private Vector2 GetGalaxySystemWorldPosition(DatabaseManager.IndexedSystem s) => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale);
+        private Vector2 GetGalaxySystemWorldPosition(IndexedSystem s) => new Vector2(s.X * GalaxyScale, s.Y * GalaxyScale);
         private Vector2 GetSystemWaypointWorldPosition(SystemWaypoint w) => new Vector2(w.X * SystemScale, w.Y * SystemScale);
         private Vector2 GetWaypointWorldPosition(Waypoint w) => new Vector2(w.X * SystemScale, w.Y * SystemScale);
         private Vector2 WorldToScreen(Vector2 wp) => MapViewportMath.WorldToScreen(wp, MapZoom, MapOffset);
@@ -428,7 +428,7 @@ namespace SpaceTraders.UI
             }
         }
 
-        private void SelectGalaxySystem(DatabaseManager.IndexedSystem s, VisualElement entry = null)
+        private void SelectGalaxySystem(IndexedSystem s, VisualElement entry = null)
         {
             _selectedSymbol = s.Symbol; _selectedSystemSymbol = s.Symbol; _selectedWaypoint = null;
             ClearListSelection();
@@ -589,7 +589,7 @@ namespace SpaceTraders.UI
             MapOffset = MapViewportMath.CenterOnWorldPoint(rect, wp, MapZoom);
         }
 
-        private void ApplyGalaxySystemSelectionDetails(DatabaseManager.IndexedSystem s)
+        private void ApplyGalaxySystemSelectionDetails(IndexedSystem s)
         {
             if (_wpSymbolLabel != null) _wpSymbolLabel.text = s.Symbol;
             if (_wpTypeLabel != null) _wpTypeLabel.text = s.Type.Replace("_", " ");
@@ -1115,7 +1115,7 @@ namespace SpaceTraders.UI
             p.Fill(); if (s.StrokeWidth > 0) p.Stroke(); if (s.HasCore) { p.fillColor = s.CoreColor; p.BeginPath(); p.Arc(pos, r * s.CoreRadiusFactor, 0, 360); p.Fill(); }
         }
 
-        private IconStyle GetSystemStyle(DatabaseManager.IndexedSystem s)
+        private IconStyle GetSystemStyle(IndexedSystem s)
         {
             return MapStyleResolver.GetSystemStyle(s);
         }
@@ -1141,7 +1141,7 @@ namespace SpaceTraders.UI
             }
         }
 
-        private DatabaseManager.IndexedSystem FindClosestGalaxySystem(Vector2 worldPoint, float worldThreshold)
+        private IndexedSystem FindClosestGalaxySystem(Vector2 worldPoint, float worldThreshold)
         {
             return MapSelectionMath.FindClosest(
                 _filteredSystems,
@@ -1150,7 +1150,7 @@ namespace SpaceTraders.UI
                 GetGalaxySystemWorldPosition);
         }
 
-        internal DatabaseManager.IndexedSystem FindClosestGalaxySystemForTest(Vector2 worldPoint, float worldThreshold)
+        internal IndexedSystem FindClosestGalaxySystemForTest(Vector2 worldPoint, float worldThreshold)
         {
             return FindClosestGalaxySystem(worldPoint, worldThreshold);
         }
@@ -1174,7 +1174,7 @@ namespace SpaceTraders.UI
             HandleMapClick(localPoint);
         }
 
-        internal void SetFilteredSystemsForTest(List<DatabaseManager.IndexedSystem> systems)
+        internal void SetFilteredSystemsForTest(List<IndexedSystem> systems)
         {
             _filteredSystems = systems;
         }
@@ -1214,7 +1214,7 @@ namespace SpaceTraders.UI
 
     internal static class MapFilterMatcher
     {
-        public static bool MatchesGalaxySystem(DatabaseManager.IndexedSystem system, string query, string typeFilter, string facilityFilter)
+        public static bool MatchesGalaxySystem(IndexedSystem system, string query, string typeFilter, string facilityFilter)
         {
             bool matchesQuery = string.IsNullOrEmpty(query) || system.Symbol.Contains(query);
             bool matchesType = IsTypeMatch(system.Type, typeFilter);
@@ -1347,12 +1347,12 @@ namespace SpaceTraders.UI
 
     internal static class MapDataProjection
     {
-        public static List<DatabaseManager.IndexedSystem> ToIndexedSystems(IEnumerable<SpaceTraders.Generated.Model.System> systems)
+        public static List<IndexedSystem> ToIndexedSystems(IEnumerable<SpaceTraders.Generated.Model.System> systems)
         {
-            if (systems == null) return new List<DatabaseManager.IndexedSystem>();
+            if (systems == null) return new List<IndexedSystem>();
 
             return systems
-                .Select(system => new DatabaseManager.IndexedSystem
+                .Select(system => new IndexedSystem
                 {
                     Symbol = system.Symbol,
                     SectorSymbol = system.SectorSymbol,
@@ -1470,7 +1470,7 @@ namespace SpaceTraders.UI
 
     internal static class MapStyleResolver
     {
-        public static MapPresenter.IconStyle GetSystemStyle(DatabaseManager.IndexedSystem system)
+        public static MapPresenter.IconStyle GetSystemStyle(IndexedSystem system)
         {
             var style = new MapPresenter.IconStyle
             {
