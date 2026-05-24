@@ -124,35 +124,34 @@ namespace SpaceTraders.UI
             panel.style.flexGrow = 1;
             container.Add(panel);
 
-            // Bind references
-            _systemList = panel.Q<VisualElement>("system-list");
-            _mapContainer = panel.Q<VisualElement>("map-container");
-            _waypointsLayer = panel.Q<VisualElement>("waypoints-layer");
-            _searchField = panel.Q<TextField>("system-search");
-            _selectedSystemLabel = panel.Q<Label>("selected-system-title");
-            _systemDetailPanel = panel.Q<VisualElement>("waypoint-details");
-            _legendItems = panel.Q<VisualElement>("legend-items");
-            _legendContent = panel.Q<VisualElement>("legend-content");
-            _viewGalaxyButton = panel.Q<Button>("view-galaxy-btn");
-            _prevPageButton = panel.Q<Button>("prev-page");
-            _nextPageButton = panel.Q<Button>("next-page");
-            _pageInfoLabel = panel.Q<Label>("page-info");
-            _legendToggleButton = panel.Q<Button>("legend-toggle");
-            _wpSymbolLabel = panel.Q<Label>("wp-symbol");
-            _wpTypeLabel = panel.Q<Label>("wp-type");
-            _wpCoordsLabel = panel.Q<Label>("wp-coords");
-            _wpDescLabel = panel.Q<Label>("wp-desc");
-            _extraInfoTitleLabel = panel.Q<Label>("extra-info-title");
-            _extraContentContainer = panel.Q<VisualElement>("extra-content-container");
-            _typeFilter = panel.Q<DropdownField>("type-filter");
-            _facilityFilter = panel.Q<DropdownField>("facility-filter");
-
-            if (_mapContainer == null || _systemList == null)
+            if (!MapPanelBindings.TryCreate(panel, out var bindings))
             {
                 container.Clear();
                 container.Add(new Label("Error: System Panel Template missing required elements."));
                 return;
             }
+
+            _systemList = bindings.SystemList;
+            _mapContainer = bindings.MapContainer;
+            _waypointsLayer = bindings.WaypointsLayer;
+            _searchField = bindings.SearchField;
+            _selectedSystemLabel = bindings.SelectedSystemLabel;
+            _systemDetailPanel = bindings.SystemDetailPanel;
+            _legendItems = bindings.LegendItems;
+            _legendContent = bindings.LegendContent;
+            _viewGalaxyButton = bindings.ViewGalaxyButton;
+            _prevPageButton = bindings.PrevPageButton;
+            _nextPageButton = bindings.NextPageButton;
+            _pageInfoLabel = bindings.PageInfoLabel;
+            _legendToggleButton = bindings.LegendToggleButton;
+            _wpSymbolLabel = bindings.WaypointSymbolLabel;
+            _wpTypeLabel = bindings.WaypointTypeLabel;
+            _wpCoordsLabel = bindings.WaypointCoordsLabel;
+            _wpDescLabel = bindings.WaypointDescLabel;
+            _extraInfoTitleLabel = bindings.ExtraInfoTitleLabel;
+            _extraContentContainer = bindings.ExtraContentContainer;
+            _typeFilter = bindings.TypeFilter;
+            _facilityFilter = bindings.FacilityFilter;
 
             _labelContainer = new VisualElement { style = { position = Position.Absolute, width = Length.Percent(100), height = Length.Percent(100) }, pickingMode = PickingMode.Ignore };
             _mapContainer?.Add(_labelContainer);
@@ -1221,348 +1220,6 @@ namespace SpaceTraders.UI
             private void OnPointerMove(PointerMoveEvent e) { if (_a) { _p.MapOffset += (Vector2)e.localPosition - _lm; _p.RefreshMapUI(); _lm = e.localPosition; e.StopPropagation(); } }
             private void OnPointerUp(PointerUpEvent e) { if (_a && (e.button == 1 || e.button == 2)) { _a = false; target.ReleasePointer(e.pointerId); e.StopPropagation(); } }
             private void OnWheel(WheelEvent e) { float d = -e.delta.y * 0.1f; float oz = _p.MapZoom; _p.MapZoom = Mathf.Clamp(_p.MapZoom * (1f + d), _p._minZoom, _p._maxZoom); _p.MapOffset = e.localMousePosition - ((e.localMousePosition - _p.MapOffset) / oz * _p.MapZoom); _p.RefreshMapUI(); e.StopPropagation(); }
-        }
-    }
-
-    internal static class MapFilterMatcher
-    {
-        public static bool MatchesGalaxySystem(IndexedSystem system, string query, string typeFilter, string facilityFilter)
-        {
-            bool matchesQuery = string.IsNullOrEmpty(query) || system.Symbol.Contains(query);
-            bool matchesType = IsTypeMatch(system.Type, typeFilter);
-            bool matchesFacility = IsFacilityStringMatch(system.KnownFacilities, facilityFilter);
-            return matchesQuery && matchesType && matchesFacility;
-        }
-
-        public static bool MatchesWaypoint(SystemWaypoint waypoint, Waypoint detailedWaypoint, string search, string typeFilter, string facilityFilter)
-        {
-            bool matchesSearch = string.IsNullOrEmpty(search) || waypoint.Symbol.Contains(search);
-            bool matchesType = IsTypeMatch(waypoint.Type.ToString(), typeFilter);
-            bool matchesFacility = IsWaypointFacilityMatch(detailedWaypoint, facilityFilter);
-            return matchesSearch && matchesType && matchesFacility;
-        }
-
-        private static bool IsTypeMatch(string candidateType, string typeFilter)
-        {
-            if (typeFilter == "ALL") return true;
-            return NormalizeToken(candidateType) == NormalizeToken(typeFilter);
-        }
-
-        private static bool IsFacilityStringMatch(string knownFacilities, string facilityFilter)
-        {
-            if (facilityFilter == "ALL") return true;
-            return !string.IsNullOrEmpty(knownFacilities) && knownFacilities.Contains(facilityFilter);
-        }
-
-        private static bool IsWaypointFacilityMatch(Waypoint detailedWaypoint, string facilityFilter)
-        {
-            if (facilityFilter == "ALL") return true;
-            if (detailedWaypoint?.Traits == null) return false;
-
-            string normalizedFacility = NormalizeToken(facilityFilter);
-            return detailedWaypoint.Traits.Any(t => NormalizeToken(t.Symbol.ToString()) == normalizedFacility);
-        }
-
-        private static string NormalizeToken(string value)
-        {
-            return (value ?? string.Empty).Replace("_", string.Empty).ToUpperInvariant();
-        }
-    }
-
-    internal static class MapSelectionMath
-    {
-        public static T FindClosest<T>(IEnumerable<T> items, Vector2 targetPoint, float threshold, Func<T, Vector2> getWorldPosition)
-            where T : class
-        {
-            if (items == null || getWorldPosition == null) return null;
-
-            return items
-                .Select(item => (Item: item, Distance: Vector2.Distance(getWorldPosition(item), targetPoint)))
-                .Where(x => x.Distance < threshold)
-                .OrderBy(x => x.Distance)
-                .Select(x => x.Item)
-                .FirstOrDefault();
-        }
-    }
-
-    internal static class MapWaypointTreeFilter
-    {
-        public static bool HasMatchInSubtree(SystemWaypoint waypoint, Dictionary<string, List<SystemWaypoint>> childMap, Func<SystemWaypoint, bool> isMatch)
-        {
-            if (waypoint == null || isMatch == null) return false;
-
-            if (isMatch(waypoint)) return true;
-            if (childMap == null) return false;
-            if (!childMap.TryGetValue(waypoint.Symbol, out var children) || children == null) return false;
-
-            foreach (var child in children)
-            {
-                if (HasMatchInSubtree(child, childMap, isMatch)) return true;
-            }
-
-            return false;
-        }
-    }
-
-    internal static class MapWaypointDetailLookup
-    {
-        public static Waypoint FindBySymbol(IEnumerable<Waypoint> detailedWaypoints, string symbol)
-        {
-            if (detailedWaypoints == null || string.IsNullOrEmpty(symbol)) return null;
-            return detailedWaypoints.FirstOrDefault(x => x.Symbol == symbol);
-        }
-    }
-
-    internal static class MapHierarchyProjection
-    {
-        public static Dictionary<string, List<SystemWaypoint>> BuildChildMap(IEnumerable<SystemWaypoint> waypoints)
-        {
-            if (waypoints == null)
-            {
-                return new Dictionary<string, List<SystemWaypoint>>();
-            }
-
-            return waypoints
-                .GroupBy(waypoint => waypoint.Orbits ?? string.Empty)
-                .ToDictionary(group => group.Key, group => group.OrderBy(waypoint => waypoint.Symbol).ToList());
-        }
-
-        public static List<SystemWaypoint> BuildRootWaypoints(IEnumerable<SystemWaypoint> waypoints, Dictionary<string, List<SystemWaypoint>> childMap)
-        {
-            if (childMap != null && childMap.TryGetValue(string.Empty, out var rootsFromMap))
-            {
-                return rootsFromMap;
-            }
-
-            if (waypoints == null)
-            {
-                return new List<SystemWaypoint>();
-            }
-
-            return waypoints
-                .Where(waypoint => string.IsNullOrEmpty(waypoint.Orbits))
-                .OrderBy(waypoint => waypoint.Symbol)
-                .ToList();
-        }
-    }
-
-    internal static class MapModeTransitionResolver
-    {
-        public static string GetSystemLoadTarget(string selectedSystemSymbol, string selectedSymbol, SpaceTraders.Generated.Model.System currentSystem)
-        {
-            string target = !string.IsNullOrEmpty(selectedSystemSymbol) ? selectedSystemSymbol : selectedSymbol;
-            if (string.IsNullOrEmpty(target)) return null;
-            if (!string.IsNullOrEmpty(currentSystem?.Symbol) && currentSystem.Symbol == target) return null;
-            return target;
-        }
-    }
-
-    internal static class MapDataProjection
-    {
-        public static List<IndexedSystem> ToIndexedSystems(IEnumerable<SpaceTraders.Generated.Model.System> systems)
-        {
-            if (systems == null) return new List<IndexedSystem>();
-
-            return systems
-                .Select(system => new IndexedSystem
-                {
-                    Symbol = system.Symbol,
-                    SectorSymbol = system.SectorSymbol,
-                    Type = system.Type.ToString(),
-                    X = system.X,
-                    Y = system.Y,
-                    WaypointCount = system.Waypoints?.Count ?? 0
-                })
-                .ToList();
-        }
-
-        public static List<SystemWaypoint> ToSystemWaypoints(IEnumerable<Waypoint> detailedWaypoints)
-        {
-            if (detailedWaypoints == null) return new List<SystemWaypoint>();
-
-            return detailedWaypoints
-                .Select(waypoint => new SystemWaypoint(
-                    symbol: waypoint.Symbol,
-                    type: waypoint.Type,
-                    x: waypoint.X,
-                    y: waypoint.Y,
-                    orbitals: waypoint.Orbitals ?? new List<WaypointOrbital>(),
-                    orbits: waypoint.Orbits))
-                .ToList();
-        }
-
-        public static string ExtractKnownFacilitiesCsv(IEnumerable<Waypoint> waypoints)
-        {
-            if (waypoints == null) return string.Empty;
-
-            bool hasMarketplace = false;
-            bool hasShipyard = false;
-            bool hasConstruction = false;
-
-            foreach (var waypoint in waypoints)
-            {
-                if (waypoint?.Traits == null) continue;
-
-                foreach (var trait in waypoint.Traits)
-                {
-                    if (trait == null) continue;
-
-                    if (trait.Symbol == WaypointTraitSymbol.MARKETPLACE) hasMarketplace = true;
-                    else if (trait.Symbol == WaypointTraitSymbol.SHIPYARD) hasShipyard = true;
-                    else if (trait.Symbol == WaypointTraitSymbol.UNDERCONSTRUCTION) hasConstruction = true;
-                }
-            }
-
-            var facilities = new List<string>();
-            if (hasMarketplace) facilities.Add("MARKETPLACE");
-            if (hasShipyard) facilities.Add("SHIPYARD");
-            if (hasConstruction) facilities.Add("CONSTRUCTION");
-
-            return string.Join(",", facilities);
-        }
-    }
-
-    internal sealed class MapRequestVersionGate
-    {
-        private int _currentVersion;
-
-        public int Begin()
-        {
-            _currentVersion++;
-            return _currentVersion;
-        }
-
-        public bool IsCurrent(int requestVersion)
-        {
-            return requestVersion == _currentVersion;
-        }
-    }
-
-    internal static class MapViewportMath
-    {
-        public static Vector2 WorldToScreen(Vector2 worldPoint, float zoom, Vector2 offset)
-        {
-            return worldPoint * zoom + offset;
-        }
-
-        public static Vector2 ScreenToWorld(Vector2 localPoint, float zoom, Vector2 offset)
-        {
-            return (localPoint - offset) / Mathf.Max(zoom, 0.000001f);
-        }
-
-        public static Vector2 CenterOnWorldPoint(Rect rect, Vector2 worldPoint, float zoom)
-        {
-            return (rect.size / 2f) - (worldPoint * zoom);
-        }
-
-        public static (Vector2 Offset, float Zoom) FitBounds(IEnumerable<Vector2> points, Rect rect, float minZoom, float maxZoom)
-        {
-            var list = points.ToList();
-            if (list.Count == 0)
-            {
-                return (rect.size / 2f, 1.0f);
-            }
-
-            float minX = list.Min(p => p.x);
-            float maxX = list.Max(p => p.x);
-            float minY = list.Min(p => p.y);
-            float maxY = list.Max(p => p.y);
-
-            float width = Mathf.Max(1f, maxX - minX);
-            float height = Mathf.Max(1f, maxY - minY);
-            float zoomX = (rect.width * 0.85f) / width;
-            float zoomY = (rect.height * 0.85f) / height;
-            float zoom = Mathf.Clamp(Mathf.Min(zoomX, zoomY), minZoom, maxZoom);
-
-            var center = new Vector2((minX + maxX) / 2f, (minY + maxY) / 2f);
-            var offset = (rect.size / 2f) - (center * zoom);
-            return (offset, zoom);
-        }
-    }
-
-    internal static class MapStyleResolver
-    {
-        public static MapPresenter.IconStyle GetSystemStyle(IndexedSystem system)
-        {
-            var style = new MapPresenter.IconStyle
-            {
-                Radius = 3f,
-                StrokeWidth = 0,
-                FillColor = Color.white,
-                Shape = MapPresenter.IconShape.Circle
-            };
-
-            string type = (system.Type ?? string.Empty).Replace("_", string.Empty);
-            if (type == "REDSTAR") style.FillColor = new Color(1f, 0.4f, 0.4f);
-            else if (type == "BLUESTAR") style.FillColor = new Color(0.4f, 0.4f, 1f);
-            else if (type == "YOUNGSTAR") style.FillColor = new Color(0.6f, 1f, 1f);
-            else if (type == "WHITEDWARF") { style.FillColor = Color.white; style.Radius = 2f; }
-            else if (type == "BLACKHOLE") { style.FillColor = Color.black; style.StrokeColor = Color.purple; style.StrokeWidth = 1f; }
-            else if (type == "NEBULA") { style.FillColor = new Color(1f, 0.2f, 1f, 0.4f); style.Shape = MapPresenter.IconShape.Square; style.Radius = 5f; }
-
-            return style;
-        }
-
-        public static MapPresenter.IconStyle GetWaypointStyle(SystemWaypoint waypoint)
-        {
-            var style = new MapPresenter.IconStyle
-            {
-                Radius = 4f,
-                StrokeWidth = 0,
-                FillColor = Color.white,
-                Shape = MapPresenter.IconShape.Circle
-            };
-
-            switch (waypoint.Type)
-            {
-                case WaypointType.PLANET:
-                    style.FillColor = new Color(0.2f, 0.6f, 1f);
-                    break;
-                case WaypointType.MOON:
-                    style.FillColor = Color.gray;
-                    style.Radius = 2f;
-                    break;
-                case WaypointType.ORBITALSTATION:
-                    style.FillColor = Color.yellow;
-                    style.Shape = MapPresenter.IconShape.Square;
-                    style.Radius = 3f;
-                    break;
-                case WaypointType.JUMPGATE:
-                    style.FillColor = new Color(0.7f, 0f, 1f);
-                    style.Shape = MapPresenter.IconShape.Diamond;
-                    break;
-                case WaypointType.ASTEROIDFIELD:
-                    style.FillColor = new Color(0.5f, 0.4f, 0.3f);
-                    style.Shape = MapPresenter.IconShape.Hexagon;
-                    break;
-            }
-
-            return style;
-        }
-    }
-
-    internal static class WaypointDescriptionBuilder
-    {
-        public static string Build(Waypoint waypoint)
-        {
-            string description = waypoint.Type switch
-            {
-                WaypointType.PLANET => "Celestial body orbiting a star.",
-                WaypointType.MOON => "Satellite orbiting a planet.",
-                WaypointType.ORBITALSTATION => "Man-made orbital construct.",
-                WaypointType.JUMPGATE => "Fast travel gateway.",
-                WaypointType.ASTEROIDFIELD => "Mining region.",
-                WaypointType.NEBULA => "Cloud of gas and dust.",
-                WaypointType.GASGIANT => "Large gaseous planet.",
-                _ => "Location in space."
-            };
-
-            if (waypoint.Traits?.Count > 0)
-            {
-                description += "\n\nTraits: " + string.Join(", ", waypoint.Traits.Select(t => t.Name));
-            }
-
-            return description;
         }
     }
 }
