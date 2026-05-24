@@ -32,6 +32,7 @@ namespace SpaceTraders.UI
         private SpaceTradersClient _client;
         private AuthManager _authManager;
         private APIService _apiService;
+        private bool _wasInjected;
 
         private Tab _currentTab = Tab.Agent;
         private int _tabRequestVersion;
@@ -42,6 +43,8 @@ namespace SpaceTraders.UI
             _client = client;
             _authManager = authManager;
             _apiService = apiService;
+            _wasInjected = true;
+            Log.Info("[DashboardController] Dependencies injected successfully.");
         }
 
         private void Start()
@@ -51,8 +54,46 @@ namespace SpaceTraders.UI
             _mapPresenter = GetComponent<MapPresenter>();
             _shipyardPresenter = GetComponent<ShipyardPresenter>();
 
+            EnsureDependenciesResolved();
+
             InitializeUI();
             SwitchTab(Tab.Agent);
+        }
+
+        private void EnsureDependenciesResolved()
+        {
+            if (_client != null && _authManager != null && _apiService != null)
+            {
+                return;
+            }
+
+            if (!_wasInjected)
+            {
+                Log.Warning("[DashboardController] Construct(...) was not called before Start. Auto-injection likely skipped for this GameObject.");
+            }
+
+            var scope = VContainer.Unity.LifetimeScope.Find<GameLifetimeScope>();
+            if (scope == null)
+            {
+                Log.Error("[DashboardController] Could not find GameLifetimeScope. Verify VContainer project root is active.");
+                return;
+            }
+
+            try
+            {
+                _client ??= scope.Container.Resolve<SpaceTradersClient>();
+                _authManager ??= scope.Container.Resolve<AuthManager>();
+                _apiService ??= scope.Container.Resolve<APIService>();
+
+                if (_client != null && _authManager != null && _apiService != null)
+                {
+                    Log.Warning("[DashboardController] Container can resolve dependencies, but DashboardController was not auto-injected. Check GameplayLifetimeScope.autoInjectGameObjects includes this GameObject.");
+                }
+            }
+            catch (VContainer.VContainerException)
+            {
+                Log.Error("[DashboardController] One or more dependencies are not registered in GameLifetimeScope.");
+            }
         }
 
 
@@ -187,6 +228,11 @@ namespace SpaceTraders.UI
             
             try
             {
+                if (_client == null || _authManager == null || _apiService == null)
+                {
+                    throw new InvalidOperationException("Dashboard dependencies are null. Injection or container resolution failed.");
+                }
+
                 _client.SetToken(_authManager.AgentToken);
 
                 await FetchAndRenderTabData(tab, requestVersion);
@@ -253,6 +299,12 @@ namespace SpaceTraders.UI
 
         private void DisplayAgent(Agent agent)
         {
+            if (agent == null)
+            {
+                _dataContainer.Add(new Label("Agent data unavailable. Check token validity and API connectivity."));
+                return;
+            }
+
             var root = GetContentRoot();
             DashboardViewRenderer.RenderAgent(root, agent);
         }

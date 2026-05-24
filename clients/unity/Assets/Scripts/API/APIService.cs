@@ -47,6 +47,11 @@ namespace SpaceTraders.API
             return await _client.ExecuteAsync(() => _client.Fleet.GetMyShipsWithHttpInfoAsync(page, limit), "GetShips");
         }
 
+        public async Task<GetMyShip200Response> GetShip(string shipSymbol)
+        {
+            return await _client.ExecuteAsync(() => _client.Fleet.GetMyShipWithHttpInfoAsync(shipSymbol), "GetShip");
+        }
+
         public async Task<GetSystems200Response> GetSystems(int page = 1, int limit = 10)
         {
             string cacheKey = $"systems_p{page}_l{limit}";

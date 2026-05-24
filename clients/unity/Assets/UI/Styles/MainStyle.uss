@@ -121,23 +121,30 @@
 .split-view {
     flex-direction: row;
     flex-grow: 1;
+    min-height: 0;
 }
 
 .left-pane {
-    width: 30%;
+    width: 32%;
+    min-width: 250px;
+    max-width: 420px;
     border-right-width: 1px;
     border-right-color: rgb(70, 70, 70);
     padding-right: 10px;
+    min-height: 0;
 }
 
 .right-pane {
-    width: 70%;
+    width: 68%;
+    min-width: 0;
     padding-left: 10px;
     position: relative;
+    min-height: 0;
 }
 
 .system-map {
     flex-grow: 1;
+    min-height: 0;
     background-color: rgb(20, 20, 20);
     border-radius: 10px;
     margin-bottom: 10px;

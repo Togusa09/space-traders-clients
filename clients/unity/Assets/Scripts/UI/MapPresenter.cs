@@ -421,7 +421,7 @@ namespace SpaceTraders.UI
                 var root = entry.Q<VisualElement>(null, "dashboard-entry") ?? entry;
                 root.name = $"list-{s.Symbol}"; root.AddToClassList("selectable-entry");
                 entry.Q<Label>("symbol-label").text = s.Symbol;
-                entry.Q<Label>("details-label").text = $"{s.Type.Replace("_", " ")} | {s.X},{s.Y}";
+                entry.Q<Label>("details-label").text = $"{s.Type.Replace("_", " ")} ({s.WaypointCount} WP)";
                 if (s.Symbol == _selectedSymbol) root.AddToClassList("selected-entry");
                 root.RegisterCallback<ClickEvent>(_ => SelectGalaxySystem(s, root));
                 _systemList.Add(entry); _listEntries.Add(root);
@@ -478,7 +478,8 @@ namespace SpaceTraders.UI
             root.name = $"list-{w.Symbol}"; root.AddToClassList("selectable-entry");
             root.style.marginLeft = ind * 12;
             entry.Q<Label>("symbol-label").text = (ind > 0 ? "↳ " : "") + w.Symbol;
-            entry.Q<Label>("details-label").text = w.Type.ToString().Replace("_", " ");
+            var detailed = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, w.Symbol);
+            entry.Q<Label>("details-label").text = BuildWaypointListDetails(w, detailed);
             if (w.Symbol == _selectedSymbol) root.AddToClassList("selected-entry");
             root.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(w));
             _systemList.Add(entry); _listEntries.Add(root);
@@ -593,10 +594,37 @@ namespace SpaceTraders.UI
             if (_wpSymbolLabel != null) _wpSymbolLabel.text = s.Symbol;
             if (_wpTypeLabel != null) _wpTypeLabel.text = s.Type.Replace("_", " ");
             if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"({s.X}, {s.Y})";
-            if (_wpDescLabel != null) _wpDescLabel.text = "Select 'SYSTEM' to view waypoints and details.";
+            if (_wpDescLabel != null) _wpDescLabel.text = "Use OPEN SYSTEM to view waypoints and details.";
             _extraContentContainer?.Clear();
             if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "System Info";
-            if (_extraContentContainer != null) { _extraContentContainer.Add(new Label($"Sector: {s.SectorSymbol}")); _extraContentContainer.Add(new Label($"Waypoints: {s.WaypointCount}")); if (!string.IsNullOrEmpty(s.KnownFacilities)) _extraContentContainer.Add(new Label($"Facilities: {s.KnownFacilities.Replace(",", ", ")}")); }
+            if (_extraContentContainer != null)
+            {
+                _extraContentContainer.Add(new Label($"Sector: {s.SectorSymbol}"));
+                _extraContentContainer.Add(new Label($"Waypoints: {s.WaypointCount}"));
+                if (!string.IsNullOrEmpty(s.KnownFacilities))
+                {
+                    _extraContentContainer.Add(new Label($"Facilities: {s.KnownFacilities.Replace(",", ", ")}"));
+                }
+
+                var actionsTitle = new Label("Actions")
+                {
+                    style =
+                    {
+                        marginTop = 8,
+                        fontSize = 11,
+                        unityFontStyleAndWeight = FontStyle.Bold,
+                        color = new Color(0.8f, 0.8f, 0.8f)
+                    }
+                };
+                _extraContentContainer.Add(actionsTitle);
+
+                var openSystemButton = new Button(() => SelectSystem(s.Symbol)) { text = "OPEN SYSTEM" };
+                openSystemButton.AddToClassList("button");
+                openSystemButton.style.width = 140;
+                openSystemButton.style.height = 28;
+                openSystemButton.style.marginTop = 4;
+                _extraContentContainer.Add(openSystemButton);
+            }
         }
 
         private void ApplySystemWaypointSelectionDetails(SystemWaypoint w)
@@ -633,34 +661,380 @@ namespace SpaceTraders.UI
                 }
                 else
                 {
-                    if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "Services";
-                    var mT = _apiService.GetMarket(ss, ws); var sT = _apiService.GetShipyard(ss, ws); var cT = _apiService.GetConstruction(ss, ws);
-                    await Task.WhenAll(mT, sT, cT);
-                    bool any = false;
-                    if (mT.Result?.Data != null) { any = true; var b = new Button(() => Log.Info("Market")) { text = "OPEN MARKET" }; b.AddToClassList("button"); _extraContentContainer.Add(b); }
-                    if (sT.Result?.Data != null)
+                    if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "Marketplace / Actions";
+
+                    var detailedWaypoint = string.Equals(_selectedWaypoint?.Symbol, ws, StringComparison.OrdinalIgnoreCase)
+                        ? _selectedWaypoint
+                        : MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, ws);
+
+                    bool hasMarketplace = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.MARKETPLACE);
+                    bool hasShipyard = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.SHIPYARD);
+                    bool hasConstruction = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.UNDERCONSTRUCTION);
+
+                    var marketTask = hasMarketplace
+                        ? TryGetMarketAsync(ss, ws)
+                        : Task.FromResult<GetMarket200Response>(null);
+                    var shipyardTask = hasShipyard
+                        ? TryGetShipyardAsync(ss, ws)
+                        : Task.FromResult<GetShipyard200Response>(null);
+                    var constructionTask = hasConstruction
+                        ? TryGetConstructionAsync(ss, ws)
+                        : Task.FromResult<GetConstruction200Response>(null);
+                    await Task.WhenAll(marketTask, shipyardTask, constructionTask);
+
+                    var market = marketTask.Result?.Data;
+                    var shipyard = shipyardTask.Result?.Data;
+                    var construction = constructionTask.Result?.Data;
+
+                    bool hasServices = false;
+                    if (market != null)
                     {
-                        any = true;
-                        var b = new Button(() => {
-                            var dashboard = GetComponent<DashboardController>();
-                            if (dashboard != null) dashboard.ShowShipyard(ws);
-                            else Log.Error("[MapPresenter] DashboardController not found to show shipyard.");
-                        }) { text = "OPEN SHIPYARD" };
-                        b.AddToClassList("button");
-                        _extraContentContainer.Add(b);
+                        hasServices = true;
+                        AddSectionTitle(_extraContentContainer, "Marketplace");
+                        _extraContentContainer.Add(new Label($"Imports: {SummarizeTradeGoods(market.Imports)}"));
+                        _extraContentContainer.Add(new Label($"Exports: {SummarizeTradeGoods(market.Exports)}"));
+                        _extraContentContainer.Add(new Label($"Exchange: {SummarizeTradeGoods(market.Exchange)}"));
                     }
-                    if (cT.Result?.Data != null && !cT.Result.Data.IsComplete) { any = true; _extraContentContainer.Add(new Label("Construction in progress.")); }
-                    if (!any) _extraContentContainer.Add(new Label("No specialized info."));
+
+                    if (shipyard != null || (construction != null && !construction.IsComplete))
+                    {
+                        hasServices = true;
+                        AddSectionTitle(_extraContentContainer, "Waypoint Services");
+                        if (shipyard != null)
+                        {
+                            var openShipyardButton = new Button(() =>
+                            {
+                                var dashboard = GetComponent<DashboardController>();
+                                if (dashboard != null) dashboard.ShowShipyard(ws);
+                                else Log.Error("[MapPresenter] DashboardController not found to show shipyard.");
+                            }) { text = "OPEN SHIPYARD" };
+                            openShipyardButton.AddToClassList("button");
+                            openShipyardButton.style.width = 160;
+                            openShipyardButton.style.height = 26;
+                            _extraContentContainer.Add(openShipyardButton);
+                        }
+
+                        if (construction != null && !construction.IsComplete)
+                        {
+                            _extraContentContainer.Add(new Label("Construction in progress."));
+                        }
+                    }
+
+                    await PopulateShipInSystemActionsAsync(ss, ws);
+
+                    if (!hasServices)
+                    {
+                        _extraContentContainer.Add(new Label("No specialized services at this waypoint."));
+                    }
                 }
             }
             catch (Exception e) { _extraContentContainer?.Clear(); _extraContentContainer?.Add(new Label($"Load error: {e.Message}")); }
         }
 
+        private static bool HasWaypointTrait(Waypoint waypoint, WaypointTraitSymbol trait)
+        {
+            return waypoint?.Traits != null && waypoint.Traits.Any(t => t.Symbol == trait);
+        }
+
         private void UpdateModeChrome()
         {
-            if (_viewGalaxyButton != null) { bool hs = !string.IsNullOrEmpty(_selectedSystemSymbol) || !string.IsNullOrEmpty(_selectedSymbol); _viewGalaxyButton.style.visibility = hs ? Visibility.Visible : Visibility.Hidden; _viewGalaxyButton.SetEnabled(hs); _viewGalaxyButton.text = _mapMode == MapMode.System ? "GALAXY" : "SYSTEM"; }
+            if (_viewGalaxyButton != null)
+            {
+                bool showBackButton = _mapMode == MapMode.System;
+                _viewGalaxyButton.style.visibility = showBackButton ? Visibility.Visible : Visibility.Hidden;
+                _viewGalaxyButton.SetEnabled(showBackButton);
+                _viewGalaxyButton.text = "GALAXY";
+            }
             if (_selectedSystemLabel != null) { var st = !string.IsNullOrEmpty(_currentSystem?.Symbol) ? _currentSystem.Symbol : (!string.IsNullOrEmpty(_selectedSystemSymbol) ? _selectedSystemSymbol : _selectedSymbol); _selectedSystemLabel.text = _mapMode == MapMode.System && !string.IsNullOrEmpty(st) ? $"System: {st}" : "Galaxy Map"; }
             if (_legendContent != null) _legendContent.style.display = _legendExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private static string BuildWaypointListDetails(SystemWaypoint waypoint, Waypoint detailedWaypoint)
+        {
+            var typeText = waypoint.Type.ToString().Replace("_", " ");
+            var tags = GetWaypointFacilityTags(detailedWaypoint);
+            if (tags.Count == 0)
+            {
+                return typeText;
+            }
+
+            return $"{typeText} | {string.Join(" ", tags.Select(tag => $"[{tag}]"))}";
+        }
+
+        private static List<string> GetWaypointFacilityTags(Waypoint waypoint)
+        {
+            var tags = new List<string>();
+            if (waypoint?.Traits == null)
+            {
+                return tags;
+            }
+
+            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.MARKETPLACE)) tags.Add("MARKET");
+            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.SHIPYARD)) tags.Add("SHIPYARD");
+            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.UNDERCONSTRUCTION)) tags.Add("CONSTRUCT");
+            return tags;
+        }
+
+        private async Task<GetMarket200Response> TryGetMarketAsync(string systemSymbol, string waypointSymbol)
+        {
+            try
+            {
+                return await _apiService.GetMarket(systemSymbol, waypointSymbol);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<GetShipyard200Response> TryGetShipyardAsync(string systemSymbol, string waypointSymbol)
+        {
+            try
+            {
+                return await _apiService.GetShipyard(systemSymbol, waypointSymbol);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<GetConstruction200Response> TryGetConstructionAsync(string systemSymbol, string waypointSymbol)
+        {
+            try
+            {
+                return await _apiService.GetConstruction(systemSymbol, waypointSymbol);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task PopulateShipInSystemActionsAsync(string systemSymbol, string waypointSymbol)
+        {
+            var ships = await FetchShipsInSystemAsync(systemSymbol);
+
+            AddSectionTitle(_extraContentContainer, "Ship In-System Actions");
+            if (ships == null || ships.Count == 0)
+            {
+                _extraContentContainer.Add(new Label("No owned ships in this system."));
+                return;
+            }
+
+            foreach (var ship in ships)
+            {
+                var row = new VisualElement
+                {
+                    style =
+                    {
+                        flexDirection = FlexDirection.Row,
+                        justifyContent = Justify.SpaceBetween,
+                        alignItems = Align.Center,
+                        marginTop = 2,
+                        marginBottom = 2,
+                        paddingLeft = 4,
+                        paddingRight = 4
+                    }
+                };
+
+                string status = ship.Nav?.Status.ToString().Replace("_", " ") ?? "UNKNOWN";
+                var shipLabel = new Label($"{ship.Symbol} ({status})")
+                {
+                    style =
+                    {
+                        flexGrow = 1,
+                        fontSize = 10
+                    }
+                };
+                row.Add(shipLabel);
+
+                var navButton = new Button { text = "NAV HERE" };
+                navButton.AddToClassList("button");
+                navButton.style.width = 90;
+                navButton.style.height = 24;
+                navButton.style.fontSize = 10;
+
+                bool inOrbit = ship.Nav?.Status == ShipNavStatus.INORBIT;
+                bool alreadyThere = string.Equals(ship.Nav?.WaypointSymbol, waypointSymbol, StringComparison.OrdinalIgnoreCase);
+                navButton.SetEnabled(inOrbit && !alreadyThere);
+                if (alreadyThere)
+                {
+                    navButton.text = "HERE";
+                }
+
+                navButton.clicked += async () => await NavigateShipToWaypointAsync(ship, waypointSymbol, navButton);
+
+                row.Add(navButton);
+                _extraContentContainer.Add(row);
+            }
+        }
+
+        private async Task<List<Ship>> FetchShipsInSystemAsync(string systemSymbol)
+        {
+            const int shipPageSize = 20;
+            var results = new List<Ship>();
+            int page = 1;
+
+            while (true)
+            {
+                var response = await _apiService.GetShips(page: page, limit: shipPageSize);
+                var pageShips = response?.Data;
+                if (pageShips == null || pageShips.Count == 0)
+                {
+                    break;
+                }
+
+                results.AddRange(pageShips.Where(ship =>
+                    string.Equals(ship?.Nav?.SystemSymbol, systemSymbol, StringComparison.OrdinalIgnoreCase)));
+
+                if (pageShips.Count < shipPageSize)
+                {
+                    break;
+                }
+
+                page++;
+            }
+
+            return results
+                .Where(ship => ship != null)
+                .OrderBy(ship => ship.Symbol)
+                .ToList();
+        }
+
+        private async Task NavigateShipToWaypointAsync(Ship ship, string waypointSymbol, Button navButton)
+        {
+            if (ship?.Nav?.Status != ShipNavStatus.INORBIT || string.IsNullOrWhiteSpace(waypointSymbol))
+            {
+                return;
+            }
+
+            try
+            {
+                navButton.SetEnabled(false);
+
+                var latestShipResponse = await _apiService.GetShip(ship.Symbol);
+                var latestShip = latestShipResponse?.Data;
+                if (latestShip?.Nav == null)
+                {
+                    Log.Warning("[MapPresenter] Unable to validate latest nav state for {Ship}.", ship.Symbol);
+                    return;
+                }
+
+                if (latestShip.Nav.Status != ShipNavStatus.INORBIT)
+                {
+                    Log.Warning("[MapPresenter] Navigation blocked for {Ship}: ship status is {Status}.", ship.Symbol, latestShip.Nav.Status);
+                    return;
+                }
+
+                if (string.Equals(latestShip.Nav.WaypointSymbol, waypointSymbol, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Info("[MapPresenter] Navigation skipped for {Ship}: already at {Waypoint}.", ship.Symbol, waypointSymbol);
+                    return;
+                }
+
+                var destinationSystem = GetSystemSymbolFromWaypoint(waypointSymbol);
+                if (!string.Equals(latestShip.Nav.SystemSymbol, destinationSystem, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Warning("[MapPresenter] Navigation blocked for {Ship}: destination {Waypoint} is outside current system {System}.", ship.Symbol, waypointSymbol, latestShip.Nav.SystemSymbol);
+                    return;
+                }
+
+                int availableFuel = latestShip.Fuel?.Current ?? 0;
+                int estimatedFuelRequired = EstimateFuelRequired(latestShip.Nav.WaypointSymbol, waypointSymbol);
+                if (estimatedFuelRequired > 0 && availableFuel < estimatedFuelRequired)
+                {
+                    Log.Warning("[MapPresenter] Navigation blocked for {Ship}: requires ~{Required} fuel but only {Available} available.", ship.Symbol, estimatedFuelRequired, availableFuel);
+                    return;
+                }
+
+                await _apiService.NavigateShip(ship.Symbol, waypointSymbol);
+                _ = UpdateSpecializedInfoAsync(waypointSymbol, _selectedWaypoint?.Type.ToString() ?? string.Empty);
+            }
+            catch (SpaceTraders.Generated.Client.ApiException e)
+            {
+                string responseContent = e.ErrorContent?.ToString() ?? "<empty>";
+                Log.Error("[MapPresenter] Failed to navigate {Ship} to {Waypoint}: {Code} {Message}. Response: {Content}", ship.Symbol, waypointSymbol, e.ErrorCode, e.Message, responseContent);
+            }
+            catch (Exception e)
+            {
+                Log.Error("[MapPresenter] Failed to navigate {Ship} to {Waypoint}: {Error}", ship.Symbol, waypointSymbol, e.Message);
+            }
+            finally
+            {
+                navButton.SetEnabled(ship?.Nav?.Status == ShipNavStatus.INORBIT);
+            }
+        }
+
+        private int EstimateFuelRequired(string fromWaypointSymbol, string toWaypointSymbol)
+        {
+            if (!TryGetWaypointPosition(fromWaypointSymbol, out var fromPos) || !TryGetWaypointPosition(toWaypointSymbol, out var toPos))
+            {
+                return 0;
+            }
+
+            return Mathf.CeilToInt(Vector2.Distance(fromPos, toPos));
+        }
+
+        private bool TryGetWaypointPosition(string waypointSymbol, out Vector2 position)
+        {
+            position = Vector2.zero;
+            if (string.IsNullOrWhiteSpace(waypointSymbol))
+            {
+                return false;
+            }
+
+            var systemWaypoint = _currentSystem?.Waypoints?.FirstOrDefault(wp => wp.Symbol == waypointSymbol);
+            if (systemWaypoint != null)
+            {
+                position = new Vector2(systemWaypoint.X, systemWaypoint.Y);
+                return true;
+            }
+
+            var detailedWaypoint = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, waypointSymbol);
+            if (detailedWaypoint != null)
+            {
+                position = new Vector2(detailedWaypoint.X, detailedWaypoint.Y);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void AddSectionTitle(VisualElement container, string text)
+        {
+            var label = new Label(text)
+            {
+                style =
+                {
+                    marginTop = 8,
+                    fontSize = 11,
+                    unityFontStyleAndWeight = FontStyle.Bold,
+                    color = new Color(0.8f, 0.8f, 0.8f)
+                }
+            };
+            container.Add(label);
+        }
+
+        private static string SummarizeTradeGoods(IEnumerable<TradeGood> goods)
+        {
+            if (goods == null)
+            {
+                return "-";
+            }
+
+            var names = goods
+                .Select(good => good?.Symbol.ToString())
+                .Where(symbol => !string.IsNullOrWhiteSpace(symbol))
+                .Take(6)
+                .ToList();
+
+            if (names.Count == 0)
+            {
+                return "-";
+            }
+
+            return string.Join(", ", names);
         }
 
         private void RefreshLegend()
