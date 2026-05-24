@@ -1,3 +1,4 @@
+using System;
 using VContainer;
 using VContainer.Unity;
 using SpaceTraders.API;
@@ -16,6 +17,11 @@ namespace SpaceTraders
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void EnsureProjectRootScope()
         {
+            if (GameLifetimeScopePolicy.ShouldSkipFallbackScopeCreation(Environment.CommandLine))
+            {
+                return;
+            }
+
             if (FindAnyObjectByType<GameLifetimeScope>() != null)
             {
                 return;
@@ -63,6 +69,21 @@ namespace SpaceTraders
             component = child.AddComponent<T>();
             Debug.LogWarning($"[GameLifetimeScope] Missing {typeof(T).Name} in hierarchy. Created fallback instance.");
             return component;
+        }
+    }
+
+    internal static class GameLifetimeScopePolicy
+    {
+        public static bool ShouldSkipFallbackScopeCreation(string commandLine)
+        {
+            if (string.IsNullOrEmpty(commandLine))
+            {
+                return false;
+            }
+
+            // Unity CLI test runs include one or both of these switches.
+            return commandLine.IndexOf("-runTests", StringComparison.OrdinalIgnoreCase) >= 0
+                || commandLine.IndexOf("-testPlatform", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
