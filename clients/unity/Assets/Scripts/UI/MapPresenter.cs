@@ -481,7 +481,7 @@ namespace SpaceTraders.UI
             root.style.marginLeft = ind * 12;
             entry.Q<Label>("symbol-label").text = (ind > 0 ? "↳ " : "") + w.Symbol;
             var detailed = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, w.Symbol);
-            entry.Q<Label>("details-label").text = BuildWaypointListDetails(w, detailed);
+            entry.Q<Label>("details-label").text = MapWaypointDetailsPresenter.BuildWaypointListDetails(w, detailed);
             if (w.Symbol == _selectedSymbol) root.AddToClassList("selected-entry");
             root.RegisterCallback<ClickEvent>(_ => SelectSystemWaypoint(w));
             _systemList.Add(entry); _listEntries.Add(root);
@@ -593,58 +593,36 @@ namespace SpaceTraders.UI
 
         private void ApplyGalaxySystemSelectionDetails(IndexedSystem s)
         {
-            if (_wpSymbolLabel != null) _wpSymbolLabel.text = s.Symbol;
-            if (_wpTypeLabel != null) _wpTypeLabel.text = s.Type.Replace("_", " ");
-            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"({s.X}, {s.Y})";
-            if (_wpDescLabel != null) _wpDescLabel.text = "Use OPEN SYSTEM to view waypoints and details.";
-            _extraContentContainer?.Clear();
-            if (_extraInfoTitleLabel != null) _extraInfoTitleLabel.text = "System Info";
-            if (_extraContentContainer != null)
-            {
-                _extraContentContainer.Add(new Label($"Sector: {s.SectorSymbol}"));
-                _extraContentContainer.Add(new Label($"Waypoints: {s.WaypointCount}"));
-                if (!string.IsNullOrEmpty(s.KnownFacilities))
-                {
-                    _extraContentContainer.Add(new Label($"Facilities: {s.KnownFacilities.Replace(",", ", ")}"));
-                }
-
-                var actionsTitle = new Label("Actions")
-                {
-                    style =
-                    {
-                        marginTop = 8,
-                        fontSize = 11,
-                        unityFontStyleAndWeight = FontStyle.Bold,
-                        color = new Color(0.8f, 0.8f, 0.8f)
-                    }
-                };
-                _extraContentContainer.Add(actionsTitle);
-
-                var openSystemButton = new Button(() => SelectSystem(s.Symbol)) { text = "OPEN SYSTEM" };
-                openSystemButton.AddToClassList("button");
-                openSystemButton.style.width = 140;
-                openSystemButton.style.height = 28;
-                openSystemButton.style.marginTop = 4;
-                _extraContentContainer.Add(openSystemButton);
-            }
+            MapWaypointDetailsPresenter.ApplyGalaxySystemSelectionDetails(
+                _wpSymbolLabel,
+                _wpTypeLabel,
+                _wpCoordsLabel,
+                _wpDescLabel,
+                _extraInfoTitleLabel,
+                _extraContentContainer,
+                s,
+                () => SelectSystem(s.Symbol));
         }
 
         private void ApplySystemWaypointSelectionDetails(SystemWaypoint w)
         {
-            if (_wpSymbolLabel != null) _wpSymbolLabel.text = w.Symbol;
-            if (_wpTypeLabel != null) _wpTypeLabel.text = w.Type.ToString().Replace("_", " ");
-            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"({w.X}, {w.Y})";
-            if (_wpDescLabel != null) _wpDescLabel.text = "Loading details...";
-            _extraContentContainer?.Clear();
+            MapWaypointDetailsPresenter.ApplySystemWaypointSelectionDetails(
+                _wpSymbolLabel,
+                _wpTypeLabel,
+                _wpCoordsLabel,
+                _wpDescLabel,
+                _extraContentContainer,
+                w);
         }
 
         private void ApplyWaypointSelectionDetails(Waypoint w)
         {
-            if (_wpSymbolLabel != null) _wpSymbolLabel.text = w.Symbol;
-            if (_wpTypeLabel != null) _wpTypeLabel.text = w.Type.ToString().Replace("_", " ");
-            if (_wpCoordsLabel != null) _wpCoordsLabel.text = $"({w.X}, {w.Y})";
-            string d = WaypointDescriptionBuilder.Build(w);
-            if (_wpDescLabel != null) _wpDescLabel.text = d;
+            MapWaypointDetailsPresenter.ApplyWaypointSelectionDetails(
+                _wpSymbolLabel,
+                _wpTypeLabel,
+                _wpCoordsLabel,
+                _wpDescLabel,
+                w);
             _ = UpdateSpecializedInfoAsync(w.Symbol, w.Type.ToString());
         }
 
@@ -669,18 +647,18 @@ namespace SpaceTraders.UI
                         ? _selectedWaypoint
                         : MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, ws);
 
-                    bool hasMarketplace = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.MARKETPLACE);
-                    bool hasShipyard = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.SHIPYARD);
-                    bool hasConstruction = HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.UNDERCONSTRUCTION);
+                    bool hasMarketplace = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.MARKETPLACE);
+                    bool hasShipyard = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.SHIPYARD);
+                    bool hasConstruction = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.UNDERCONSTRUCTION);
 
                     var marketTask = hasMarketplace
-                        ? TryGetMarketAsync(ss, ws)
+                        ? MapWaypointServiceFacade.TryGetMarketAsync(_apiService, ss, ws)
                         : Task.FromResult<GetMarket200Response>(null);
                     var shipyardTask = hasShipyard
-                        ? TryGetShipyardAsync(ss, ws)
+                        ? MapWaypointServiceFacade.TryGetShipyardAsync(_apiService, ss, ws)
                         : Task.FromResult<GetShipyard200Response>(null);
                     var constructionTask = hasConstruction
-                        ? TryGetConstructionAsync(ss, ws)
+                        ? MapWaypointServiceFacade.TryGetConstructionAsync(_apiService, ss, ws)
                         : Task.FromResult<GetConstruction200Response>(null);
                     await Task.WhenAll(marketTask, shipyardTask, constructionTask);
 
@@ -692,16 +670,16 @@ namespace SpaceTraders.UI
                     if (market != null)
                     {
                         hasServices = true;
-                        AddSectionTitle(_extraContentContainer, "Marketplace");
-                        _extraContentContainer.Add(new Label($"Imports: {SummarizeTradeGoods(market.Imports)}"));
-                        _extraContentContainer.Add(new Label($"Exports: {SummarizeTradeGoods(market.Exports)}"));
-                        _extraContentContainer.Add(new Label($"Exchange: {SummarizeTradeGoods(market.Exchange)}"));
+                        MapWaypointDetailsPresenter.AddSectionTitle(_extraContentContainer, "Marketplace");
+                        _extraContentContainer.Add(new Label($"Imports: {MapWaypointDetailsPresenter.SummarizeTradeGoods(market.Imports)}"));
+                        _extraContentContainer.Add(new Label($"Exports: {MapWaypointDetailsPresenter.SummarizeTradeGoods(market.Exports)}"));
+                        _extraContentContainer.Add(new Label($"Exchange: {MapWaypointDetailsPresenter.SummarizeTradeGoods(market.Exchange)}"));
                     }
 
                     if (shipyard != null || (construction != null && !construction.IsComplete))
                     {
                         hasServices = true;
-                        AddSectionTitle(_extraContentContainer, "Waypoint Services");
+                        MapWaypointDetailsPresenter.AddSectionTitle(_extraContentContainer, "Waypoint Services");
                         if (shipyard != null)
                         {
                             var openShipyardButton = new Button(() =>
@@ -733,11 +711,6 @@ namespace SpaceTraders.UI
             catch (Exception e) { _extraContentContainer?.Clear(); _extraContentContainer?.Add(new Label($"Load error: {e.Message}")); }
         }
 
-        private static bool HasWaypointTrait(Waypoint waypoint, WaypointTraitSymbol trait)
-        {
-            return waypoint?.Traits != null && waypoint.Traits.Any(t => t.Symbol == trait);
-        }
-
         private void UpdateModeChrome()
         {
             if (_viewGalaxyButton != null)
@@ -751,73 +724,11 @@ namespace SpaceTraders.UI
             if (_legendContent != null) _legendContent.style.display = _legendExpanded ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        private static string BuildWaypointListDetails(SystemWaypoint waypoint, Waypoint detailedWaypoint)
-        {
-            var typeText = waypoint.Type.ToString().Replace("_", " ");
-            var tags = GetWaypointFacilityTags(detailedWaypoint);
-            if (tags.Count == 0)
-            {
-                return typeText;
-            }
-
-            return $"{typeText} | {string.Join(" ", tags.Select(tag => $"[{tag}]"))}";
-        }
-
-        private static List<string> GetWaypointFacilityTags(Waypoint waypoint)
-        {
-            var tags = new List<string>();
-            if (waypoint?.Traits == null)
-            {
-                return tags;
-            }
-
-            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.MARKETPLACE)) tags.Add("MARKET");
-            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.SHIPYARD)) tags.Add("SHIPYARD");
-            if (waypoint.Traits.Any(trait => trait.Symbol == WaypointTraitSymbol.UNDERCONSTRUCTION)) tags.Add("CONSTRUCT");
-            return tags;
-        }
-
-        private async Task<GetMarket200Response> TryGetMarketAsync(string systemSymbol, string waypointSymbol)
-        {
-            try
-            {
-                return await _apiService.GetMarket(systemSymbol, waypointSymbol);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private async Task<GetShipyard200Response> TryGetShipyardAsync(string systemSymbol, string waypointSymbol)
-        {
-            try
-            {
-                return await _apiService.GetShipyard(systemSymbol, waypointSymbol);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private async Task<GetConstruction200Response> TryGetConstructionAsync(string systemSymbol, string waypointSymbol)
-        {
-            try
-            {
-                return await _apiService.GetConstruction(systemSymbol, waypointSymbol);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         private async Task PopulateShipInSystemActionsAsync(string systemSymbol, string waypointSymbol)
         {
-            var ships = await FetchShipsInSystemAsync(systemSymbol);
+            var ships = await MapWaypointServiceFacade.FetchShipsInSystemAsync(_apiService, systemSymbol);
 
-            AddSectionTitle(_extraContentContainer, "Ship In-System Actions");
+            MapWaypointDetailsPresenter.AddSectionTitle(_extraContentContainer, "Ship In-System Actions");
             if (ships == null || ships.Count == 0)
             {
                 _extraContentContainer.Add(new Label("No owned ships in this system."));
@@ -872,38 +783,6 @@ namespace SpaceTraders.UI
             }
         }
 
-        private async Task<List<Ship>> FetchShipsInSystemAsync(string systemSymbol)
-        {
-            const int shipPageSize = 20;
-            var results = new List<Ship>();
-            int page = 1;
-
-            while (true)
-            {
-                var response = await _apiService.GetShips(page: page, limit: shipPageSize);
-                var pageShips = response?.Data;
-                if (pageShips == null || pageShips.Count == 0)
-                {
-                    break;
-                }
-
-                results.AddRange(pageShips.Where(ship =>
-                    string.Equals(ship?.Nav?.SystemSymbol, systemSymbol, StringComparison.OrdinalIgnoreCase)));
-
-                if (pageShips.Count < shipPageSize)
-                {
-                    break;
-                }
-
-                page++;
-            }
-
-            return results
-                .Where(ship => ship != null)
-                .OrderBy(ship => ship.Symbol)
-                .ToList();
-        }
-
         private async Task NavigateShipToWaypointAsync(Ship ship, string waypointSymbol, Button navButton)
         {
             if (ship?.Nav?.Status != ShipNavStatus.INORBIT || string.IsNullOrWhiteSpace(waypointSymbol))
@@ -943,7 +822,11 @@ namespace SpaceTraders.UI
                 }
 
                 int availableFuel = latestShip.Fuel?.Current ?? 0;
-                int estimatedFuelRequired = EstimateFuelRequired(latestShip.Nav.WaypointSymbol, waypointSymbol);
+                int estimatedFuelRequired = MapWaypointServiceFacade.EstimateFuelRequired(
+                    latestShip.Nav.WaypointSymbol,
+                    waypointSymbol,
+                    _currentSystem?.Waypoints,
+                    _detailedWaypoints);
                 if (estimatedFuelRequired > 0 && availableFuel < estimatedFuelRequired)
                 {
                     Log.Warning("[MapPresenter] Navigation blocked for {Ship}: requires ~{Required} fuel but only {Available} available.", ship.Symbol, estimatedFuelRequired, availableFuel);
@@ -966,77 +849,6 @@ namespace SpaceTraders.UI
             {
                 navButton.SetEnabled(ship?.Nav?.Status == ShipNavStatus.INORBIT);
             }
-        }
-
-        private int EstimateFuelRequired(string fromWaypointSymbol, string toWaypointSymbol)
-        {
-            if (!TryGetWaypointPosition(fromWaypointSymbol, out var fromPos) || !TryGetWaypointPosition(toWaypointSymbol, out var toPos))
-            {
-                return 0;
-            }
-
-            return Mathf.CeilToInt(Vector2.Distance(fromPos, toPos));
-        }
-
-        private bool TryGetWaypointPosition(string waypointSymbol, out Vector2 position)
-        {
-            position = Vector2.zero;
-            if (string.IsNullOrWhiteSpace(waypointSymbol))
-            {
-                return false;
-            }
-
-            var systemWaypoint = _currentSystem?.Waypoints?.FirstOrDefault(wp => wp.Symbol == waypointSymbol);
-            if (systemWaypoint != null)
-            {
-                position = new Vector2(systemWaypoint.X, systemWaypoint.Y);
-                return true;
-            }
-
-            var detailedWaypoint = MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, waypointSymbol);
-            if (detailedWaypoint != null)
-            {
-                position = new Vector2(detailedWaypoint.X, detailedWaypoint.Y);
-                return true;
-            }
-
-            return false;
-        }
-
-        private static void AddSectionTitle(VisualElement container, string text)
-        {
-            var label = new Label(text)
-            {
-                style =
-                {
-                    marginTop = 8,
-                    fontSize = 11,
-                    unityFontStyleAndWeight = FontStyle.Bold,
-                    color = new Color(0.8f, 0.8f, 0.8f)
-                }
-            };
-            container.Add(label);
-        }
-
-        private static string SummarizeTradeGoods(IEnumerable<TradeGood> goods)
-        {
-            if (goods == null)
-            {
-                return "-";
-            }
-
-            var names = goods
-                .Select(good => good?.Symbol.ToString())
-                .Where(symbol => !string.IsNullOrWhiteSpace(symbol))
-                .Take(6)
-                .ToList();
-
-            if (names.Count == 0)
-            {
-                return "-";
-            }
-
-            return string.Join(", ", names);
         }
 
         private void RefreshLegend()
