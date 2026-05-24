@@ -331,19 +331,9 @@ namespace SpaceTraders.UI
             if (_allGalaxySystems != null && _allGalaxySystems.Count > 0) return;
             if (_apiService == null) return;
 
-            var loaded = new List<IndexedSystem>();
-            int page = 1;
             try
             {
-                while (true)
-                {
-                    var res = await _apiService.GetSystems(page, 100);
-                    if (res?.Data == null || res.Data.Count == 0) break;
-                    loaded.AddRange(MapDataProjection.ToIndexedSystems(res.Data));
-                    if (res.Meta != null && loaded.Count >= res.Meta.Total) break;
-                    page++;
-                }
-                _allGalaxySystems = loaded;
+                _allGalaxySystems = await MapGalaxyDataLoader.LoadIndexedSystemsAsync(_apiService);
                 RebuildGalaxyLookup();
                 _systemIndexRepository?.StoreSystems(_allGalaxySystems);
                 ApplyFilter();
@@ -353,25 +343,12 @@ namespace SpaceTraders.UI
             catch (Exception e) { Log.Error("[Map] Load failed: {Error}", e.Message); }
         }
 
-        private void RebuildGalaxyLookup() => _galaxySystemLookup = _allGalaxySystems?.ToDictionary(s => s.Symbol, s => s) ?? new Dictionary<string, IndexedSystem>();
+        private void RebuildGalaxyLookup() => _galaxySystemLookup = MapGalaxyDataLoader.BuildLookup(_allGalaxySystems);
 
         private void LoadJumpGateConnections()
         {
             if (_jumpGateRepository == null) return;
-            var gates = _jumpGateRepository.GetAllJumpGateConnections();
-            _jumpGateSystemLinks.Clear();
-            var seen = new HashSet<string>();
-            foreach (var gate in gates)
-            {
-                if (string.IsNullOrEmpty(gate.ConnectionsJson)) continue;
-                foreach (var connWp in gate.ConnectionsJson.Split(','))
-                {
-                    string other = connWp.Split('-')[0];
-                    if (other == gate.SystemSymbol) continue;
-                    string pair = string.Compare(gate.SystemSymbol, other) < 0 ? $"{gate.SystemSymbol}-{other}" : $"{other}-{gate.SystemSymbol}";
-                    if (seen.Add(pair)) _jumpGateSystemLinks.Add((gate.SystemSymbol, other));
-                }
-            }
+            _jumpGateSystemLinks = MapGalaxyDataLoader.BuildJumpGateSystemLinks(_jumpGateRepository.GetAllJumpGateConnections());
         }
 
         private void ResetMapCamera()
