@@ -1,6 +1,6 @@
 using UnityEngine.UIElements;
 
-namespace SpaceTraders.UI
+namespace SpaceTraders.UI.Map
 {
     internal sealed class MapPanelBindings
     {

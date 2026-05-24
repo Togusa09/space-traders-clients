@@ -23,7 +23,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             };
 
             Func<DummyPoint, Vector2> selector = p => p.Position;
-            var result = SpaceTraders.UI.MapSelectionMath.FindClosest(points, new Vector2(2f, 0f), 5f, selector);
+            var result = SpaceTraders.UI.Map.MapSelectionMath.FindClosest(points, new Vector2(2f, 0f), 5f, selector);
 
             Assert.NotNull(result);
             Assert.AreEqual("A", result.Name);
@@ -38,7 +38,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             };
 
             Func<DummyPoint, Vector2> selector = p => p.Position;
-            var result = SpaceTraders.UI.MapSelectionMath.FindClosest(points, new Vector2(100f, 100f), 2f, selector);
+            var result = SpaceTraders.UI.Map.MapSelectionMath.FindClosest(points, new Vector2(100f, 100f), 2f, selector);
 
             Assert.IsNull(result);
         }

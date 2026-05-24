@@ -1,4 +1,4 @@
-namespace SpaceTraders.UI
+namespace SpaceTraders.UI.Map
 {
     internal sealed class MapRequestVersionGate
     {

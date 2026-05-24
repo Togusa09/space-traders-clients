@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace SpaceTraders.UI
+namespace SpaceTraders.UI.Map
 {
     internal static class MapSelectionMath
     {

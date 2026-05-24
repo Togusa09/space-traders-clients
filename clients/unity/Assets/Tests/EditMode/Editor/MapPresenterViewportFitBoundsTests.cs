@@ -16,7 +16,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             };
             var rect = new Rect(0f, 0f, 1000f, 1000f);
 
-            var result = SpaceTraders.UI.MapViewportMath.FitBounds(points, rect, 0.1f, 2.0f);
+            var result = SpaceTraders.UI.Map.MapViewportMath.FitBounds(points, rect, 0.1f, 2.0f);
             var zoom = result.Zoom;
 
             Assert.That(zoom, Is.EqualTo(2.0f).Within(0.0001f));
@@ -32,7 +32,7 @@ namespace SpaceTraders.Tests.EditMode.Editor
             };
             var rect = new Rect(0f, 0f, 100f, 100f);
 
-            var result = SpaceTraders.UI.MapViewportMath.FitBounds(points, rect, 0.25f, 100f);
+            var result = SpaceTraders.UI.Map.MapViewportMath.FitBounds(points, rect, 0.25f, 100f);
             var zoom = result.Zoom;
 
             Assert.That(zoom, Is.EqualTo(0.25f).Within(0.0001f));

@@ -2,7 +2,7 @@ using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
 using UnityEngine;
 
-namespace SpaceTraders.UI
+namespace SpaceTraders.UI.Map
 {
     internal static class MapStyleResolver
     {

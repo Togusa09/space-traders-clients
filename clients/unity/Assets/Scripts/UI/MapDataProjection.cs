@@ -3,7 +3,7 @@ using System.Linq;
 using SpaceTraders.Core;
 using SpaceTraders.Generated.Model;
 
-namespace SpaceTraders.UI
+namespace SpaceTraders.UI.Map
 {
     internal static class MapDataProjection
     {
