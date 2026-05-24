@@ -93,5 +93,23 @@ namespace SpaceTraders.Tests.PlayMode
             Assert.AreEqual(0, _databaseManager.GetIndexedSystemCount());
             Assert.AreEqual(0, _databaseManager.GetIndexedJumpGateCount());
         }
+
+        [UnityTest]
+        public IEnumerator DestroyAndRecreate_ManagerCanOpenSameDatabasePath()
+        {
+            yield return null;
+
+            _databaseManager.SetCache("destroy-recreate-key", "{\"value\":7}");
+            Assert.AreEqual("{\"value\":7}", _databaseManager.GetCache("destroy-recreate-key", 60));
+
+            UnityEngine.Object.DestroyImmediate(_dbObject);
+            _dbObject = new GameObject("PlayModeDatabaseManager_Recreated");
+            _databaseManager = _dbObject.AddComponent<DatabaseManager>();
+
+            yield return null;
+
+            _databaseManager.SetCache("destroy-recreate-key-2", "{\"value\":8}");
+            Assert.AreEqual("{\"value\":8}", _databaseManager.GetCache("destroy-recreate-key-2", 60));
+        }
     }
 }
