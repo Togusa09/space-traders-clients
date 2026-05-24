@@ -624,24 +624,12 @@ namespace SpaceTraders.UI
                         ? _selectedWaypoint
                         : MapWaypointDetailLookup.FindBySymbol(_detailedWaypoints, ws);
 
-                    bool hasMarketplace = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.MARKETPLACE);
-                    bool hasShipyard = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.SHIPYARD);
-                    bool hasConstruction = MapWaypointServiceFacade.HasWaypointTrait(detailedWaypoint, WaypointTraitSymbol.UNDERCONSTRUCTION);
+                    var plan = MapWaypointSpecializedInfoServicePlanner.CreatePlan(detailedWaypoint);
+                    var snapshot = await MapWaypointSpecializedInfoServicePlanner.LoadAsync(_apiService, ss, ws, plan);
 
-                    var marketTask = hasMarketplace
-                        ? MapWaypointServiceFacade.TryGetMarketAsync(_apiService, ss, ws)
-                        : Task.FromResult<GetMarket200Response>(null);
-                    var shipyardTask = hasShipyard
-                        ? MapWaypointServiceFacade.TryGetShipyardAsync(_apiService, ss, ws)
-                        : Task.FromResult<GetShipyard200Response>(null);
-                    var constructionTask = hasConstruction
-                        ? MapWaypointServiceFacade.TryGetConstructionAsync(_apiService, ss, ws)
-                        : Task.FromResult<GetConstruction200Response>(null);
-                    await Task.WhenAll(marketTask, shipyardTask, constructionTask);
-
-                    var market = marketTask.Result?.Data;
-                    var shipyard = shipyardTask.Result?.Data;
-                    var construction = constructionTask.Result?.Data;
+                    var market = snapshot.MarketResponse?.Data;
+                    var shipyard = snapshot.ShipyardResponse?.Data;
+                    var construction = snapshot.ConstructionResponse?.Data;
 
                     bool hasServices = false;
                     if (market != null)

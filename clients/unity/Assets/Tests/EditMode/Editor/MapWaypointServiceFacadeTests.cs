@@ -62,5 +62,40 @@ namespace SpaceTraders.Tests.EditMode.Editor
 
             Assert.AreEqual(5, fuel);
         }
+
+        [Test]
+        public void EstimateFuelRequired_ReturnsZeroWhenSymbolsCannotBeResolved()
+        {
+            var fuel = MapWaypointServiceFacade.EstimateFuelRequired(
+                "X1-TEST-A1",
+                "X1-TEST-A2",
+                new List<SystemWaypoint>(),
+                new List<Waypoint>());
+
+            Assert.AreEqual(0, fuel);
+        }
+
+        [Test]
+        public void EstimateFuelRequired_PrefersSystemWaypointCoordinatesOverDetailed()
+        {
+            var systemWaypoints = new List<SystemWaypoint>
+            {
+                new SystemWaypoint("X1-TEST-A1", WaypointType.PLANET, 0, 0, new List<WaypointOrbital>()),
+                new SystemWaypoint("X1-TEST-A2", WaypointType.PLANET, 6, 8, new List<WaypointOrbital>())
+            };
+            var detailed = new List<Waypoint>
+            {
+                new Waypoint("X1-TEST-A1", WaypointType.PLANET, "X1-TEST", 1, 1, new List<WaypointOrbital>(), traits: new List<WaypointTrait>(), isUnderConstruction: false),
+                new Waypoint("X1-TEST-A2", WaypointType.PLANET, "X1-TEST", 4, 5, new List<WaypointOrbital>(), traits: new List<WaypointTrait>(), isUnderConstruction: false)
+            };
+
+            var fuel = MapWaypointServiceFacade.EstimateFuelRequired(
+                "X1-TEST-A1",
+                "X1-TEST-A2",
+                systemWaypoints,
+                detailed);
+
+            Assert.AreEqual(10, fuel);
+        }
     }
 }

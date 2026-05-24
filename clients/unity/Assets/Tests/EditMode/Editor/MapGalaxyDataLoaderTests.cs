@@ -54,5 +54,38 @@ namespace SpaceTraders.Tests.EditMode.Editor
             Assert.AreEqual("X1-AAA", links[0].FromSystem);
             Assert.AreEqual("X1-BBB", links[0].ToSystem);
         }
+
+        [Test]
+        public void BuildJumpGateSystemLinks_SkipsMalformedConnectionEntries()
+        {
+            var gates = new List<IndexedJumpGate>
+            {
+                new IndexedJumpGate
+                {
+                    SystemSymbol = "X1-AAA",
+                    ConnectionsJson = ",,-,X1-BBB-WP1"
+                }
+            };
+
+            var links = MapGalaxyDataLoader.BuildJumpGateSystemLinks(gates);
+
+            Assert.AreEqual(1, links.Count);
+            Assert.AreEqual("X1-BBB", links[0].ToSystem);
+        }
+
+        [Test]
+        public void BuildJumpGateSystemLinks_ReturnsEmptyWhenGateDataMissing()
+        {
+            var gates = new List<IndexedJumpGate>
+            {
+                new IndexedJumpGate { SystemSymbol = null, ConnectionsJson = "X1-BBB-WP1" },
+                new IndexedJumpGate { SystemSymbol = "X1-AAA", ConnectionsJson = null },
+                null
+            };
+
+            var links = MapGalaxyDataLoader.BuildJumpGateSystemLinks(gates);
+
+            Assert.AreEqual(0, links.Count);
+        }
     }
 }
