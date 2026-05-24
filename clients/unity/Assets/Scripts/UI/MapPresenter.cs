@@ -250,16 +250,8 @@ namespace SpaceTraders.UI
         private void InitializeFilterOptions()
         {
             if (_typeFilter == null || _facilityFilter == null) return;
-            if (_mapMode == MapMode.Galaxy)
-            {
-                _typeFilter.choices = new List<string> { "ALL", "NEUTRON_STAR", "RED_STAR", "ORANGE_STAR", "BLUE_STAR", "YOUNG_STAR", "WHITE_DWARF", "BLACK_HOLE", "HYPERGIANT", "NEBULA", "UNSTABLE" };
-                _facilityFilter.choices = new List<string> { "ALL", "MARKETPLACE", "SHIPYARD", "CONSTRUCTION" };
-            }
-            else
-            {
-                _typeFilter.choices = new List<string> { "ALL", "PLANET", "MOON", "ORBITAL_STATION", "JUMP_GATE", "ASTEROID_FIELD", "ASTEROID", "ENGINEERED_ASTEROID_OUTPOST", "ASTEROID_BASE", "NEBULA", "DEBRIS_FIELD", "GRAVITY_WELL", "ARTIFICIAL_GRAVITY_WELL", "FUEL_STATION" };
-                _facilityFilter.choices = new List<string> { "ALL", "MARKETPLACE", "SHIPYARD", "CONSTRUCTION" };
-            }
+            _typeFilter.choices = MapFilterOptions.GetTypeChoices(_mapMode == MapMode.Galaxy);
+            _facilityFilter.choices = MapFilterOptions.GetFacilityChoices();
             _typeFilter.index = 0;
             _facilityFilter.index = 0;
         }
@@ -296,9 +288,12 @@ namespace SpaceTraders.UI
 
         private void ChangePage(int delta)
         {
-            if (_filteredSystems == null || _filteredSystems.Count == 0) return;
-            int totalPages = Mathf.Max(1, Mathf.CeilToInt((float)_filteredSystems.Count / PageSize));
-            _currentPage = Mathf.Clamp(_currentPage + delta, 1, totalPages);
+            if (!MapListOrchestration.TryChangePage(_currentPage, delta, _filteredSystems?.Count ?? 0, PageSize, out var nextPage, out _))
+            {
+                return;
+            }
+
+            _currentPage = nextPage;
             PopulateSystemList();
             if (_mapMode == MapMode.Galaxy) { ResetMapCamera(); RefreshMapUI(); }
         }
@@ -416,9 +411,9 @@ namespace SpaceTraders.UI
             if (_mapMode == MapMode.System) { PopulateWaypointHierarchyList(); return; }
             if (_filteredSystems == null || _filteredSystems.Count == 0) { UpdatePageInfo(0, 0); return; }
 
-            int total = Mathf.CeilToInt((float)_filteredSystems.Count / PageSize);
-            _currentPage = Mathf.Clamp(_currentPage, 1, total);
-            _pagedSystems = _filteredSystems.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+            int total = MapListOrchestration.ComputeTotalPages(_filteredSystems.Count, PageSize);
+            _currentPage = MapListOrchestration.ClampPage(_currentPage, total);
+            _pagedSystems = MapListOrchestration.PageItems(_filteredSystems, _currentPage, PageSize);
             UpdatePageInfo(_currentPage, total);
 
             foreach (var s in _pagedSystems)
