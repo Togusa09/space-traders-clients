@@ -311,6 +311,17 @@ namespace SpaceTraders.Generated.Client
                 request.method = method;
                 request.SetRequestHeader("Content-Type", "application/json");
             }
+            else if (
+                string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(contentType) &&
+                contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                // Some SpaceTraders POST endpoints require a valid JSON payload even when
+                // no fields are provided; send an explicit empty object instead of an empty body.
+                request = UnityWebRequest.Put(uri, "{}");
+                request.method = method;
+                request.SetRequestHeader("Content-Type", "application/json");
+            }
             else
             {
                 request = new UnityWebRequest(builder.GetFullUri(), method);
